@@ -23,6 +23,10 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     html,body,#root{height:100%;background:#0A0B0D;overflow:hidden;color:#E8EDF2}
+    /* iOS: 100vh overflows behind Safari bars — dvh tracks the real visible viewport */
+    .shell{height:100vh;height:100dvh}
+    .sheet86{max-height:86vh;max-height:86dvh}
+    .sheet82{max-height:82vh;max-height:82dvh}
     button{cursor:pointer;border:none;background:none;font-family:inherit}
     input,select,textarea{outline:none;font-family:inherit}
     select{-webkit-appearance:none;appearance:none}
@@ -73,7 +77,7 @@ function App(){
 
   const TABS=[{id:'draw',icon:'⌗',lbl:'DRAW'},{id:'cut',icon:'✂',lbl:'CUT'},{id:'tape',icon:'⊞',lbl:'TAPE'},{id:'tools',icon:'◯',lbl:'TOOLS'},{id:'more',icon:'≡',lbl:'MORE'}];
   return(
-    <div style={{display:'flex',flexDirection:'column',height:'100vh',background:thm.bg,color:thm.fg,fontFamily:FB,overflow:'hidden'}}>
+    <div className="shell" style={{display:'flex',flexDirection:'column',background:thm.bg,color:thm.fg,fontFamily:FB,overflow:'hidden'}}>
 
       {/* Header */}
       <div style={{

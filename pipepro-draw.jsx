@@ -5,7 +5,7 @@ function BSheet({title,sub,onClose,children,zi}){
   return ReactDOM.createPortal(
     <div style={{position:'fixed',inset:0,zIndex:zi||920,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
       <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.7)'}}/>
-      <div style={{position:'relative',background:T.s1,borderRadius:'10px 10px 0 0',border:`1px solid ${T.bdr}`,borderBottom:'none',maxHeight:'86vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,0.65)'}}>
+      <div className="sheet86" style={{position:'relative',background:T.s1,borderRadius:'10px 10px 0 0',border:`1px solid ${T.bdr}`,borderBottom:'none',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,0.65)'}}>
         <div style={{padding:'10px 15px 0',flexShrink:0}}>
           <div style={{width:36,height:4,borderRadius:2,background:T.bdr,margin:'0 auto 10px'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingBottom:10,borderBottom:`1px solid ${T.bdr}`}}>

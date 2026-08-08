@@ -64,7 +64,7 @@ function MatSelect({value,onChange,label}){
     {open&&ReactDOM.createPortal(
       <div style={{position:'fixed',inset:0,zIndex:910,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
         <div onClick={()=>setOpen(false)} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(2px)'}}/>
-        <div style={{position:'relative',background:T.s1,borderRadius:'10px 10px 0 0',border:`1px solid ${T.bdr}`,borderBottom:'none',maxHeight:'82vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,0.65)'}}>
+        <div className="sheet82" style={{position:'relative',background:T.s1,borderRadius:'10px 10px 0 0',border:`1px solid ${T.bdr}`,borderBottom:'none',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,0.65)'}}>
           {/* Handle + header */}
           <div style={{padding:'10px 15px 0',flexShrink:0}}>
             <div style={{width:36,height:4,borderRadius:2,background:T.bdr,margin:'0 auto 10px'}}/>
