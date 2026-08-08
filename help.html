@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>PipePro — How To Use</title>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0B0D; --s1:#0f1318; --s2:#1a1f26; --bdr:#2e3740;
+    --lime:#A6CE39; --org:#E8631A; --amb:#C9842E;
+    --fg:#E8EDF2; --fg2:#9AAAB8; --fg3:#5a6a78;
+    --fd:'Saira Condensed','Arial Narrow',sans-serif;
+    --fb:'Barlow',system-ui,sans-serif;
+    --fm:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--fg);font:400 15px/1.6 var(--fb);-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 18px 80px}
+  header{display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:2px solid var(--lime);margin-bottom:8px}
+  header img{width:54px;height:54px;object-fit:contain;border-radius:4px}
+  h1{font:italic 900 40px/0.95 var(--fd);text-transform:uppercase;letter-spacing:0.02em}
+  .sub{font:700 11px var(--fb);color:var(--lime);letter-spacing:0.24em;text-transform:uppercase;margin-top:4px}
+  .toc{background:var(--s1);border:1px solid var(--bdr);border-radius:6px;padding:14px 18px;margin:18px 0}
+  .toc a{color:var(--lime);text-decoration:none;font:600 13px var(--fb)}
+  .toc li{margin:4px 0;list-style:none}
+  .toc li::before{content:'▸ ';color:var(--fg3)}
+  h2{font:italic 900 26px/1 var(--fd);text-transform:uppercase;letter-spacing:0.03em;color:var(--fg);
+     margin:38px 0 4px;padding-top:14px;border-top:1px solid var(--bdr)}
+  h2 .tag{display:inline-block;vertical-align:middle;margin-left:10px;font:700 10px var(--fb);letter-spacing:0.18em;
+     color:var(--ink);background:var(--lime);border-radius:3px;padding:3px 8px}
+  h3{font:700 13px var(--fb);color:var(--org);letter-spacing:0.14em;text-transform:uppercase;margin:20px 0 6px}
+  p{color:var(--fg2);margin:8px 0}
+  b,strong{color:var(--fg)}
+  .steps{counter-reset:st;margin:10px 0}
+  .steps li{list-style:none;position:relative;padding:0 0 12px 44px;color:var(--fg2)}
+  .steps li::before{counter-increment:st;content:counter(st);position:absolute;left:0;top:0;
+     width:28px;height:28px;border-radius:50%;background:var(--lime);color:var(--ink);
+     font:700 14px/28px var(--fm);text-align:center}
+  .card{background:var(--s1);border:1px solid var(--bdr);border-left:3px solid var(--lime);border-radius:4px;padding:12px 15px;margin:12px 0}
+  .card.orange{border-left-color:var(--org)}
+  .card .cl{font:700 10px var(--fb);letter-spacing:0.18em;text-transform:uppercase;color:var(--lime);margin-bottom:4px}
+  .card.orange .cl{color:var(--org)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th{font:700 10px var(--fb);letter-spacing:0.14em;text-transform:uppercase;color:var(--fg3);text-align:left;padding:6px 10px;border-bottom:2px solid var(--bdr)}
+  td{padding:7px 10px;border-bottom:1px solid var(--bdr);color:var(--fg2);vertical-align:top}
+  td:first-child{font-family:var(--fm);font-weight:600;color:var(--lime);white-space:nowrap}
+  kbd{font:600 12px var(--fm);background:var(--s2);border:1px solid var(--bdr);border-radius:3px;padding:1px 7px;color:var(--fg)}
+  .foot{margin-top:44px;padding-top:14px;border-top:1px solid var(--bdr);font:600 11px var(--fb);color:var(--fg3);letter-spacing:0.08em}
+  @media print{
+    body{background:#fff;color:#111}
+    :root{--ink:#fff;--s1:#f4f6f8;--s2:#eceff2;--bdr:#c8cdd3;--fg:#111;--fg2:#333;--fg3:#666;--lime:#4A8800;--org:#B83800}
+    .wrap{max-width:none;padding:0}
+    h2{break-after:avoid}
+    .card,.toc{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="assets/logo-chrome.jpg" onerror="this.style.display='none'">
+  <div>
+    <h1>PipePro Guide</h1>
+    <div class="sub">Field Calculator · How to use every tool</div>
+  </div>
+</header>
+
+<div class="toc">
+  <ul>
+    <li><a href="#install">Install on your iPhone</a></li>
+    <li><a href="#draw">DRAW — isometric spool drawings</a></li>
+    <li><a href="#pdf">PDF fab sheets — export &amp; share</a></li>
+    <li><a href="#cut">CUT — takeout &amp; cut length calculator</a></li>
+    <li><a href="#tape">TAPE — feet-inch-fraction calculator</a></li>
+    <li><a href="#tools">TOOLS — circumference, volume, flange, assemblies</a></li>
+    <li><a href="#more">MORE — unit converter &amp; settings</a></li>
+    <li><a href="#tips">Field tips</a></li>
+  </ul>
+</div>
+
+<h2 id="install">Install on iPhone</h2>
+<ol class="steps">
+  <li>Open <b>Safari</b> on the iPhone and go to the PipePro address (ask for the current link).</li>
+  <li>Tap the <b>Share</b> button (square with arrow) in the Safari toolbar.</li>
+  <li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+  <li>Launch <b>PipePro</b> from the home screen icon — it runs full-screen like a real app.</li>
+</ol>
+<div class="card"><div class="cl">Good to know</div>
+Drawings and settings are saved <b>on the phone</b> — closing the app never loses work. The app remembers your default pipe size, material, and schedule (set them in MORE ▸ ⚙ SETTINGS).</div>
+
+<h2 id="draw">Drawing ISOs <span class="tag">DRAW</span></h2>
+<h3>Jobs &amp; drawings</h3>
+<p>Work is organized as <b>Jobs</b> (plant + area) that hold <b>ISO drawings</b> (one per line you're fabbing). Tap <kbd>+ NEW JOB</kbd>, name it, then <kbd>+ ISO</kbd> to start a drawing. Tap any drawing in the list to reopen it; ✕ deletes.</p>
+
+<h3>Drawing with the compass pad</h3>
+<ol class="steps">
+  <li>Tap the <b>length chip</b> (bottom-left) and enter the run's center-to-center length — feet, inches, and 16ths, or tap 🎤 and say it ("five feet six and a half").</li>
+  <li>Tap a <b>direction</b> on the compass: N / S / E / W for plan directions, UP / DN for vertical.</li>
+  <li>Tap <kbd>GO</kbd> — the run is drawn and the glowing end moves to the new point.</li>
+</ol>
+<div class="card"><div class="cl">45° offsets</div>
+Tap <b>two perpendicular directions</b> (like N then E, or E then UP) before GO — PipePro draws the 45° rolled run and drops 45° ells at the corners automatically.</div>
+
+<h3>Fittings figure themselves out</h3>
+<p>Corners become <b>90° LR ells</b> (tap the fitting to switch to short-radius), gentle corners become <b>45° ells</b>, and a third leg into a fitting makes it a <b>TEE</b>. Weld numbers (W1, W2…) appear at every joint.</p>
+
+<h3>Tap anything to edit it</h3>
+<table>
+  <tr><th>Tap</th><th>What you can do</th></tr>
+  <tr><td>Run (pipe line)</td><td>Edit its length, add an inline flanged valve (enter face-to-face so the cut deducts it), or delete the run</td></tr>
+  <tr><td>Fitting</td><td>Switch LR / SR elbow, or <b>draw a branch</b> from it (makes a tee)</td></tr>
+  <tr><td>Open end (glowing)</td><td>Set end treatment — OPEN / CAP / WN FLANGE — or make it the active drawing point</td></tr>
+  <tr><td>Weld chip (W#)</td><td>Toggle each weld <b>SHOP ↔ FIELD</b></td></tr>
+</table>
+
+<h3>View controls</h3>
+<p><kbd>↩ UNDO</kbd> steps back · <kbd>FIT</kbd> re-centers · <kbd>NE ⟳</kbd> rotates the view corner (NE / SE / SW / NW) with the north arrow tracking · drag to pan, pinch to zoom.</p>
+
+<h2 id="pdf">PDF Fab Sheets <span class="tag">PDF SHEET</span></h2>
+<p>Tap <kbd>PDF SHEET</kbd> in the editor. You get a live preview of both sheets, then <kbd>⇪ SHARE / SAVE PDF</kbd> builds a letter-landscape, 2-sheet fabrication package:</p>
+<table>
+  <tr><th>Sheet 1</th><td>Bordered iso drawing with dimensions, cut lengths, flow arrows, weld tags, north arrow, and title block</td></tr>
+  <tr><th>Sheet 2</th><td>Bill of material, cut list (C-C − takeouts = cut length), and shop/field weld map</td></tr>
+</table>
+<div class="card orange"><div class="cl">On iPhone</div>
+The share sheet pops up — AirDrop it, text it, or <b>Save to Files</b>. If the share sheet doesn't appear, tap the <b>⇪ OPEN PDF</b> button that appears under the export button.</div>
+<p>Takeouts follow <b>ASME B16.9</b> (LR ells, 45s, tees) and cut lengths deduct valve face-to-face dimensions you entered.</p>
+
+<h2 id="cut">Cut Calculator <span class="tag">CUT</span></h2>
+<ol class="steps">
+  <li>Pick <b>pipe size</b> and <b>material</b> (grouped by alloy family — carbon, chrome-moly, stainless, duplex, nickel, non-ferrous).</li>
+  <li>Pick the <b>connection type</b>: butt weld, socket weld (≤ 4"), or threaded.</li>
+  <li>Choose the fitting on each end — the takeout for each shows instantly.</li>
+  <li>Enter the <b>center-to-center</b> distance. The big green number is your cut length.</li>
+</ol>
+<div class="card"><div class="cl">Valve ends</div>
+If an end is a valve, tap <kbd>⚙ VALVE CONFIG</kbd> to spec it: weld-in vs bolt-up, ANSI class (#150–#2500), face (RF/FF/RTJ), and flange end type. Bolt-up mode auto-generates the per-joint material list — flanges, gasket spec, stud count &amp; diameter, and the right bolt metallurgy for the pipe material.</div>
+
+<h2 id="tape">Tape Calculator <span class="tag">TAPE</span></h2>
+<p>A construction calculator that thinks in <b>feet-inches-sixteenths</b>. Type feet and inches on the keypad (tap the FT or IN slot first), pick a fraction chip, and use + − =. Every result also reads out in decimal inches, millimeters, and decimal feet.</p>
+<table>
+  <tr><th>ACC+</th><td>Pushes the current value into the running <b>accumulator</b> — add up a string of measurements and read the total</td></tr>
+  <tr><th>History</th><td>Every calculation is logged with a timestamp — scroll back anytime</td></tr>
+  <tr><th>1/16s</th><td>Expands the fraction row from 8ths to all sixteenths</td></tr>
+</table>
+
+<h2 id="tools">Tools <span class="tag">TOOLS</span></h2>
+<table>
+  <tr><th>CIRC</th><td>Circumference &amp; radius for any NPS or custom OD — wrap lengths for layout and saddle cuts</td></tr>
+  <tr><th>AREA</th><td>OD cross-section area and circumference</td></tr>
+  <tr><th>VOL</th><td>OD-based volume of a pipe length in gallons / in³ / cm³ — hydro test and drain-down estimates</td></tr>
+  <tr><th>ACCUM</th><td>Labeled measurement accumulator — name each item, running ft-in total</td></tr>
+  <tr><th>FLANGE</th><td>ASME B16.5 bolt-up data: bolt count, stud diameter, gasket spec, flange &amp; bolt material for any size / class / face</td></tr>
+  <tr><th>ASSY</th><td>Process assembly checklists — pump suction/discharge, steam trap, 3-valve control bypass, PRV station, sample point, instrument connection, expansion loop — with component order and engineering notes</td></tr>
+</table>
+
+<h2 id="more">More <span class="tag">MORE</span></h2>
+<p><b>Unit converter</b>: enter ft-in-frac, decimal inches, or millimeters and read all five formats at once.</p>
+<p><b>⚙ SETTINGS</b>: light/dark theme plus default pipe size, material, and schedule for every new drawing.</p>
+<p><b>📖 GUIDE</b>: opens this sheet.</p>
+
+<h2 id="tips">Field Tips</h2>
+<div class="card"><div class="cl">Workflow that works</div>
+Measure the line → draw it run-by-run with the compass → tag which welds are field welds → hit PDF SHEET and AirDrop the package to the shop. The BOM, cut list, and weld map build themselves from the drawing.</div>
+<div class="card orange"><div class="cl">Always verify</div>
+Takeouts are standard ASME dimensions. Verify field dimensions before cutting, and confirm flange class and gasket specs against the job's piping class and P&amp;ID.</div>
+
+<div class="foot">STEAMPUNK FABRICATION · HAZLEHURST, MS · (601) 757-3377 · 24/7 — PipePro Field Calculator</div>
+</div>
+</body>
+</html>

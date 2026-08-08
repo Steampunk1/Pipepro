@@ -1,0 +1,262 @@
+/* PipePro — Shared UI Components + Utility Tabs */
+const {useState,useRef,useEffect}=React;
+
+// ─── Shared UI ────────────────────────────────────────────────────────────────
+function Ey({c,ch}){return <div style={{fontSize:9,fontWeight:700,fontFamily:FB,textTransform:'uppercase',letterSpacing:'0.2em',color:c||T.lime,marginBottom:5}}>{ch}</div>;}
+function Sep(){return <div style={{height:1,background:T.bdr,margin:'12px 0'}}/>;}
+function iSt(){return{background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:3,color:T.fg,fontFamily:FM,fontSize:13,padding:'9px 11px',width:'100%'};}
+function sSt(){return{...iSt(),backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6a78' stroke-width='1.5' fill='none'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 10px center',paddingRight:28};}
+function Seg({value,options,onChange,sm}){
+  return(<div style={{display:'flex',background:'rgba(255,255,255,0.07)',borderRadius:3,padding:2,gap:2}}>
+    {options.map(o=><button key={o.v} onClick={()=>onChange(o.v)} style={{flex:1,padding:sm?'5px 3px':'6px 4px',borderRadius:2,border:'none',cursor:'pointer',background:value===o.v?T.lime:'transparent',color:value===o.v?T.bg:T.fg2,fontFamily:FM,fontSize:sm?9:10,fontWeight:value===o.v?700:500,letterSpacing:'0.04em',transition:'all .1s',whiteSpace:'nowrap'}}>{o.lbl}</button>)}
+  </div>);
+}
+function FtInEntry({value,onChange,label,compact}){
+  const{ft,ins,f16}=dcomp(value||0);
+  const[showAll,setShowAll]=useState(false);
+  const[listening,setListening]=useState(false);
+  const fracIdxs=showAll?Array.from({length:16},(_,i)=>i):F8;
+  const upd=(nft,nin,nf)=>onChange(nft*12+nin+nf/16);
+  const base={background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:3,color:T.fg,fontFamily:FM,fontSize:compact?16:18,padding:compact?'8px 4px':'10px 6px',width:'100%',textAlign:'center'};
+  const SR=typeof window!=='undefined'&&(window.SpeechRecognition||window.webkitSpeechRecognition);
+  function startVoice(){
+    if(!SR)return;
+    const r=new SR();r.lang='en-US';r.continuous=false;r.interimResults=false;
+    r.onstart=()=>setListening(true);r.onend=()=>setListening(false);r.onerror=()=>setListening(false);
+    r.onresult=e=>{const txt=e.results[0][0].transcript;const v=parseVoiceMeasure(txt);if(v!=null)onChange(v);else alert(`Could not parse: "${txt}" — try "5 feet 6 inches"`);};
+    r.start();
+  }
+  return(<div>
+    {label&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
+      <Ey ch={label}/>
+      {SR&&<button onClick={startVoice} title="Speak measurement" style={{width:26,height:26,borderRadius:3,border:`1px solid ${listening?T.org:T.bdr}`,background:listening?al(T.org,0.2):T.s2,color:listening?T.org:T.fg3,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>{listening?'🔴':'🎤'}</button>}
+    </div>}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:7}}>
+      <div><input type="number" value={ft} min="0" inputMode="numeric" onChange={e=>upd(parseInt(e.target.value)||0,ins,f16)} style={base}/><div style={{fontSize:8,color:T.fg3,textAlign:'center',marginTop:2,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em'}}>FT</div></div>
+      <div><input type="number" value={ins} min="0" max="11" inputMode="numeric" onChange={e=>upd(ft,Math.min(11,parseInt(e.target.value)||0),f16)} style={base}/><div style={{fontSize:8,color:T.fg3,textAlign:'center',marginTop:2,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em'}}>IN</div></div>
+    </div>
+    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+      {fracIdxs.map(fi=><button key={fi} onClick={()=>upd(ft,ins,fi)} style={{flex:'1 1 calc(12.5% - 4px)',minWidth:30,padding:'7px 3px',borderRadius:3,border:`1px solid ${f16===fi?T.lime:T.bdr}`,background:f16===fi?al(T.lime,0.2):T.s2,color:f16===fi?T.lime:T.fg2,fontFamily:FM,fontSize:showAll?9:11,fontWeight:f16===fi?700:400}}>{fi===0?'0"':FRACS[fi]+'"'}</button>)}
+      <button onClick={()=>setShowAll(v=>!v)} style={{flex:'0 0 auto',padding:'7px 9px',borderRadius:3,border:`1px solid ${T.bdr}`,background:T.s3,color:T.fg3,fontFamily:FB,fontSize:8,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>{showAll?'LESS':'1/16s'}</button>
+    </div>
+  </div>);
+}
+
+// ─── GROUPED MATERIAL PICKER ─────────────────────────────────────────────────
+function MatSelect({value,onChange,label}){
+  const[open,setOpen]=useState(false);
+  const grp=MATS_GROUPS.find(g=>g.items.includes(value));
+  const grpCol=grp?.color||T.fg3;
+  useEffect(()=>{
+    if(open)document.body.style.overflow='hidden';
+    else document.body.style.overflow='';
+    return()=>{document.body.style.overflow='';};
+  },[open]);
+  return(<>
+    {label&&<Ey ch={label}/>}
+    <button onClick={()=>setOpen(true)} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 11px',width:'100%',borderRadius:3,border:`1px solid ${T.bdr}`,background:T.s2,cursor:'pointer',textAlign:'left',marginBottom:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+        <div style={{width:8,height:8,borderRadius:'50%',background:grpCol,flexShrink:0}}/>
+        <span style={{fontFamily:FM,fontSize:11,color:T.fg,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{value}</span>
+      </div>
+      <span style={{color:T.fg3,fontSize:12,flexShrink:0,marginLeft:6}}>›</span>
+    </button>
+    {open&&ReactDOM.createPortal(
+      <div style={{position:'fixed',inset:0,zIndex:910,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+        <div onClick={()=>setOpen(false)} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(2px)'}}/>
+        <div style={{position:'relative',background:T.s1,borderRadius:'10px 10px 0 0',border:`1px solid ${T.bdr}`,borderBottom:'none',maxHeight:'82vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,0.65)'}}>
+          {/* Handle + header */}
+          <div style={{padding:'10px 15px 0',flexShrink:0}}>
+            <div style={{width:36,height:4,borderRadius:2,background:T.bdr,margin:'0 auto 10px'}}/>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingBottom:10,borderBottom:`1px solid ${T.bdr}`}}>
+              <div>
+                <div style={{fontSize:8,fontFamily:FB,fontWeight:700,color:T.lime,letterSpacing:'0.2em',textTransform:'uppercase'}}>PIPE MATERIAL</div>
+                <div style={{fontSize:12,fontFamily:FM,fontWeight:700,color:grpCol,marginTop:2}}>{value}</div>
+              </div>
+              <button onClick={()=>setOpen(false)} style={{width:34,height:34,borderRadius:3,border:`1px solid ${T.bdr}`,background:T.s2,color:T.fg2,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
+            </div>
+          </div>
+          {/* Scrollable list */}
+          <div style={{overflowY:'auto',flex:1,padding:'10px 15px 24px'}}>
+            {MATS_GROUPS.map(g=>(
+              <div key={g.label} style={{marginBottom:16}}>
+                <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:7,paddingBottom:5,borderBottom:`1px solid ${T.bdrS}`}}>
+                  <div style={{width:8,height:8,borderRadius:'50%',background:g.color,flexShrink:0}}/>
+                  <div style={{fontSize:8,fontFamily:FB,fontWeight:700,color:g.color,letterSpacing:'0.18em',textTransform:'uppercase'}}>{g.label}</div>
+                  <div style={{fontSize:8,fontFamily:FB,color:T.fg3,marginLeft:'auto'}}>{g.items.length} grades</div>
+                </div>
+                {g.items.map(m=>{
+                  const active=value===m;
+                  const comment=m.split('//')[1]?.trim()||'';
+                  const code=m.split('//')[0].trim();
+                  return(
+                    <button key={m} onClick={()=>{onChange(m);setOpen(false);}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',padding:'10px 12px',borderRadius:3,marginBottom:4,border:`1.5px solid ${active?g.color:T.bdr}`,background:active?al(g.color,0.12):T.s2,cursor:'pointer',textAlign:'left'}}>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontFamily:FM,fontSize:12,color:active?g.color:T.fg2,fontWeight:active?700:400,lineHeight:1.2}}>{m}</div>
+                        {g.descs?.[g.items.indexOf(m)]&&<div style={{fontSize:9,fontFamily:FB,color:active?al(g.color,0.75):T.fg3,marginTop:2,lineHeight:1.3}}>{g.descs[g.items.indexOf(m)]}</div>}
+                      </div>
+                      {active&&<span style={{color:g.color,fontSize:16,lineHeight:1,flexShrink:0,marginLeft:8}}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+  </>);
+}
+
+// ─── TAPE TAB ─────────────────────────────────────────────────────────────────
+function TapeTab(){
+  const[eft,setEft]=useState(0),[ein,setEin]=useState(0),[ef16,setEf16]=useState(0);
+  const[slot,setSlot]=useState('in'),[pendOp,setPendOp]=useState(null),[pendVal,setPendVal]=useState(null);
+  const[result,setResult]=useState(0),[hist,setHist]=useState([]),[show16,setShow16]=useState(false),[accum,setAccum]=useState([]);
+  const ev=eft*12+ein+ef16/16,hasEnt=eft>0||ein>0||ef16>0,disp=hasEnt?ev:result;
+  const fracIdxs=show16?Array.from({length:16},(_,i)=>i):F8;
+  function dig(n){if(slot==='ft'){const nv=eft===0?n:parseInt(String(eft)+n);if(nv<=9999)setEft(nv);}else{const nv=ein===0?n:parseInt(String(ein)+n);if(nv<=11)setEin(nv);else if(n<=9)setEin(n);}}
+  function back(){if(slot==='ft')setEft(f=>Math.floor(f/10));else setEin(i=>Math.floor(i/10));}
+  function clrE(){setEft(0);setEin(0);setEf16(0);setSlot('in');}
+  function clrAll(){clrE();setPendOp(null);setPendVal(null);setResult(0);}
+  function calc(a,op,b){return op==='+'?a+b:op==='-'?a-b:op==='×'?a*b:op==='÷'&&b?a/b:a;}
+  function pressOp(op){if(pendOp!==null&&!hasEnt){setPendOp(op);return;}const val=hasEnt?ev:result;if(pendOp&&pendVal!==null&&hasEnt){const r=calc(pendVal,pendOp,ev);addH(pendVal,pendOp,ev,r);setResult(r);setPendVal(r);}else{setPendVal(val);if(hasEnt)setResult(ev);}setPendOp(op);clrE();}
+  function pressEq(){if(pendOp&&pendVal!==null){const b=hasEnt?ev:0,r=calc(pendVal,pendOp,b);addH(pendVal,pendOp,b,r);setResult(r);setPendOp(null);setPendVal(null);clrE();}else if(hasEnt){setResult(ev);clrE();}}
+  function addH(a,op,b,r){setHist(h=>[{id:Date.now(),label:`${fmt(a)} ${op} ${fmt(b)} = ${fmt(r)}`,t:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})},...h].slice(0,40));}
+  function pushAccum(){const v=hasEnt?ev:result;if(v>0)setAccum(l=>[...l,{id:Date.now(),v,lbl:`#${l.length+1}`}]);}
+  const nBt=()=>({height:52,borderRadius:3,background:T.s2,color:T.fg,fontFamily:FM,fontSize:22,fontWeight:600,border:`1px solid ${T.bdr}`});
+  const oBt=(bg,fg)=>({height:52,borderRadius:3,background:bg||T.s3,color:fg||T.fg2,fontFamily:FM,fontSize:22,fontWeight:700,border:`1px solid ${T.bdr}`});
+  return(<div style={{display:'flex',flexDirection:'column',height:'100%'}}>
+    <div style={{background:T.s1,borderBottom:`1px solid ${T.bdr}`,padding:'11px 15px 9px',flexShrink:0}}>
+      {pendOp&&pendVal!==null&&<div style={{fontSize:12,fontFamily:FM,color:T.fg3,marginBottom:1}}><span style={{color:T.fg2}}>{fmt(pendVal)}</span>{' '}<span style={{color:T.lime,fontSize:15,fontWeight:700}}>{pendOp}</span></div>}
+      <div style={{fontSize:hasEnt?42:36,fontWeight:700,fontFamily:FM,lineHeight:1,letterSpacing:'-0.02em',color:hasEnt?T.fg:T.lime}}>{fmt(disp)}</div>
+      <div style={{display:'flex',gap:14,marginTop:4}}><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{fmtDec(disp)}</span><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{fmtMM(disp)}</span><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{fmtFtD(disp)}</span></div>
+    </div>
+    <div style={{flex:1,overflowY:'auto',minHeight:0,padding:'7px 11px'}}>
+      {accum.length>0&&<div style={{marginBottom:9,padding:'9px 11px',background:al(T.navy,0.8),borderRadius:3,border:`1px solid ${T.navy}`}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}><Ey ch="Accumulator"/><span style={{fontSize:15,fontFamily:FM,fontWeight:700,color:T.lime}}>{fmt(accum.reduce((s,i)=>s+i.v,0))}</span></div>
+        {accum.map(item=><div key={item.id} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.bdrS}`}}><span style={{fontSize:10,fontFamily:FB,color:T.fg3}}>{item.lbl}</span><span style={{fontSize:11,fontFamily:FM,color:T.lime}}>{fmt(item.v)}</span></div>)}
+        <button onClick={()=>setAccum([])} style={{marginTop:6,fontSize:9,color:T.danger,fontFamily:FB,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>CLEAR</button>
+      </div>}
+      {hist.length===0?<div style={{textAlign:'center',padding:'18px 0',color:T.fg3,fontSize:9,fontFamily:FB,letterSpacing:'0.15em',textTransform:'uppercase'}}>History appears here</div>:hist.map(h=><div key={h.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${T.bdrS}`}}><span style={{fontSize:11,fontFamily:FM,color:T.fg2}}>{h.label}</span><span style={{fontSize:9,color:T.fg3,fontFamily:FB,flexShrink:0,marginLeft:7}}>{h.t}</span></div>)}
+    </div>
+    <div style={{background:T.bg,borderTop:`1px solid ${T.bdr}`,padding:'7px 9px 0',flexShrink:0}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1.4fr auto',gap:5,marginBottom:6}}>
+        {[['ft',eft,'FT'],['in',ein,'IN']].map(([s,v,lbl])=><button key={s} onClick={()=>setSlot(s)} style={{height:48,borderRadius:3,background:slot===s?al(T.lime,0.15):T.s2,border:`1.5px solid ${slot===s?T.lime:T.bdr}`,color:slot===s?T.lime:T.fg,fontFamily:FM,fontSize:19,fontWeight:700,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}><span style={{lineHeight:1}}>{v}</span><span style={{fontSize:7,color:slot===s?T.lime:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',marginTop:2}}>{lbl}</span></button>)}
+        <div style={{height:48,borderRadius:3,background:T.s2,border:`1px solid ${T.bdr}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}><span style={{fontFamily:FM,fontSize:13,fontWeight:700,lineHeight:1,color:ef16>0?T.lime:T.fg2}}>{ef16===0?'0"':FRACS[ef16]+'"'}</span><span style={{fontSize:7,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',marginTop:2}}>FRAC</span></div>
+        <button onClick={back} style={{height:48,width:48,borderRadius:3,background:T.s2,border:`1px solid ${T.bdr}`,color:T.fg2,fontSize:19}}>⌫</button>
+      </div>
+      <div style={{display:'flex',gap:4,marginBottom:6,overflowX:'auto',paddingBottom:2}}>
+        {fracIdxs.map(fi=><button key={fi} onClick={()=>setEf16(fi)} style={{flex:'0 0 auto',height:36,minWidth:show16?32:42,padding:'0 4px',borderRadius:3,border:`1px solid ${ef16===fi?T.lime:T.bdr}`,background:ef16===fi?al(T.lime,0.25):T.s2,color:ef16===fi?T.lime:T.fg2,fontFamily:FM,fontSize:show16?9:11,fontWeight:ef16===fi?700:400}}>{fi===0?'0"':FRACS[fi]+'"'}</button>)}
+        <button onClick={()=>setShow16(v=>!v)} style={{flex:'0 0 auto',height:36,padding:'0 8px',borderRadius:3,border:`1px solid ${T.bdr}`,background:T.s3,color:T.fg3,fontFamily:FB,fontSize:8,fontWeight:700,letterSpacing:'0.08em',whiteSpace:'nowrap',textTransform:'uppercase'}}>{show16?'LESS':'1/16s'}</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5,marginBottom:4}}>
+        {[7,8,9].map(n=><button key={n} onClick={()=>dig(n)} style={nBt()}>{n}</button>)}
+        <button onClick={()=>pressOp('+')} style={{...oBt(),color:T.lime,fontSize:26}}>+</button>
+        {[4,5,6].map(n=><button key={n} onClick={()=>dig(n)} style={nBt()}>{n}</button>)}
+        <button onClick={()=>pressOp('-')} style={{...oBt(),color:T.lime,fontSize:26}}>−</button>
+        {[1,2,3].map(n=><button key={n} onClick={()=>dig(n)} style={nBt()}>{n}</button>)}
+        <button onClick={pressEq} style={{...oBt(T.lime,T.bg),gridRow:'span 2',fontSize:28}}>=</button>
+        <button onClick={()=>hasEnt?clrE():clrAll()} style={{...oBt(),color:T.danger,fontSize:13,fontFamily:FB,fontWeight:700}}>{hasEnt?'CLR':'AC'}</button>
+        <button onClick={()=>dig(0)} style={nBt()}>0</button>
+        <button onClick={pushAccum} style={{...oBt(al(T.navy,0.9)),color:T.fg2,fontSize:10,fontFamily:FB,fontWeight:700,letterSpacing:'0.03em',textTransform:'uppercase'}}>ACC+</button>
+      </div>
+      <div style={{height:'env(safe-area-inset-bottom,0px)'}}/>
+    </div>
+  </div>);
+}
+
+// ─── CUT TAB ──────────────────────────────────────────────────────────────────
+function CutTab(){
+  const[sz,setSz]=useState('4"'),[conn,setConn]=useState('BW'),[fFrom,setFFrom]=useState('Open End'),[fTo,setFTo]=useState('90° Elbow LR'),[cc,setCc]=useState(0),[mat,setMat]=useState('CS A106 Gr.B'),[vFrom,setVFrom]=useState({conn:'bw',cls:'#150',face:'RF',end:'WN'}),[vTo,setVTo]=useState({conn:'bw',cls:'#150',face:'RF',end:'WN'});
+  const swOk=SW_SZ.includes(sz),fitList=conn==='BW'?BW_F:conn==='SW'?SW_F:TH_F;
+  const toFrom=getTO(fFrom,sz),toTo=getTO(fTo,sz),cut=cc-toFrom-toTo,cutOk=cut>0;
+  const connCols={'BW':T.lime,'SW':T.org,'THD':T.amb};
+  useEffect(()=>{if(conn==='SW'&&!swOk)setConn('BW');},[sz]);
+  useEffect(()=>{if(!fitList.includes(fFrom))setFFrom('Open End');if(!fitList.includes(fTo))setFTo(fitList.find(f=>f!=='Open End')||'Open End');},[conn]);
+  return(<div style={{height:'100%',overflowY:'auto',padding:'13px 13px env(safe-area-inset-bottom,0)'}}>
+    <Ey ch="Pipe Size"/>
+    <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:13}}>{SIZES.map(s=><button key={s} onClick={()=>setSz(s)} style={{padding:'6px 10px',borderRadius:3,border:`1px solid ${sz===s?T.lime:T.bdr}`,background:sz===s?al(T.lime,0.15):T.s2,color:sz===s?T.lime:T.fg2,fontFamily:FM,fontSize:11,fontWeight:sz===s?700:400}}>{s}</button>)}</div>
+    <div style={{marginBottom:13}}><MatSelect value={mat} onChange={setMat} label="Material"/></div>
+    <Ey ch="Connection Type"/>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginBottom:13}}>
+      {[['BW','BUTT WELD'],['SW','SOCKET WELD'],['THD','THREADED']].map(([c,lbl])=><button key={c} onClick={()=>setConn(c)} disabled={c==='SW'&&!swOk} style={{height:42,borderRadius:3,border:`1px solid ${conn===c?connCols[c]:T.bdr}`,background:conn===c?al(connCols[c],0.15):T.s2,color:(c==='SW'&&!swOk)?T.fg3:conn===c?connCols[c]:T.fg2,fontFamily:FB,fontSize:10,fontWeight:conn===c?700:500,letterSpacing:'0.05em'}}>{lbl}</button>)}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:13}}>
+      <div><Ey ch="FROM End"/><select value={fFrom} onChange={e=>setFFrom(e.target.value)} style={sSt()}>{fitList.map(f=><option key={f} value={f}>{f}</option>)}</select>{fFrom!=='Open End'&&<div style={{fontSize:10,fontFamily:FM,color:T.amb,marginTop:4}}>TO: {fmtDec(toFrom)}</div>}<ValveConfig sz={sz} fitting={fFrom} mat={mat} vState={vFrom} setVState={setVFrom} label="FROM"/></div>
+      <div><Ey ch="TO End"/><select value={fTo} onChange={e=>setFTo(e.target.value)} style={sSt()}>{fitList.map(f=><option key={f} value={f}>{f}</option>)}</select>{fTo!=='Open End'&&<div style={{fontSize:10,fontFamily:FM,color:T.amb,marginTop:4}}>TO: {fmtDec(toTo)}</div>}<ValveConfig sz={sz} fitting={fTo} mat={mat} vState={vTo} setVState={setVTo} label="TO"/></div>
+    </div>
+    <FtInEntry value={cc} onChange={setCc} label="Center-to-Center Distance"/>
+    <Sep/>
+    <div style={{background:T.s1,borderRadius:3,border:`1px solid ${T.bdr}`,padding:'13px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginBottom:11}}>
+        <div style={{background:T.s2,borderRadius:3,padding:'9px 11px'}}><div style={{fontSize:8,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:3}}>C-C</div><div style={{fontSize:20,fontWeight:700,fontFamily:FM}}>{fmt(cc)}</div><div style={{fontSize:9,fontFamily:FM,color:T.fg3,marginTop:2}}>{fmtDec(cc)}</div></div>
+        <div style={{background:T.s2,borderRadius:3,padding:'9px 11px'}}><div style={{fontSize:8,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:3}}>Total Takeout</div><div style={{fontSize:20,fontWeight:700,fontFamily:FM,color:T.amb}}>{fmtDec(toFrom+toTo)}</div><div style={{fontSize:9,fontFamily:FM,color:T.fg3,marginTop:2}}>{fmtDec(toFrom)} + {fmtDec(toTo)}</div></div>
+      </div>
+      <div style={{background:cutOk?al(T.lime,0.1):al(T.danger,0.1),borderRadius:3,padding:'15px',border:`1px solid ${cutOk?al(T.lime,0.35):al(T.danger,0.35)}`}}>
+        <div style={{fontSize:8,fontWeight:700,color:T.fg3,letterSpacing:'0.15em',fontFamily:FB,textTransform:'uppercase',marginBottom:3}}>✂ CUT LENGTH</div>
+        <div style={{fontSize:40,fontWeight:700,fontFamily:FM,color:cutOk?T.lime:T.danger,lineHeight:1}}>{fmt(Math.max(0,cut))}</div>
+        <div style={{fontSize:11,fontFamily:FM,color:T.fg3,marginTop:5}}>{fmtDec(cut)} · {fmtMM(cut)}</div>
+        {!cutOk&&cc>0&&<div style={{fontSize:10,color:T.danger,marginTop:5,fontFamily:FB}}>⚠ Negative cut — check takeout values</div>}
+      </div>
+    </div>
+  </div>);
+}
+
+// ─── MORE TAB (Convert + future settings/history) ─────────────────────────
+function MoreTab(){
+  const btn={padding:'9px 12px',borderRadius:3,border:`1px solid ${T.bdr}`,background:T.s2,color:T.fg2,fontFamily:FB,fontSize:10,fontWeight:700,letterSpacing:'0.06em',whiteSpace:'nowrap',cursor:'pointer'};
+  return(<div style={{height:'100%',display:'flex',flexDirection:'column'}}>
+    <div style={{padding:'10px 16px 9px',borderBottom:`1px solid ${T.bdr}`,background:T.s1,flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:9,fontFamily:FB,fontWeight:700,color:T.lime,letterSpacing:'0.2em',textTransform:'uppercase'}}>UNIT CONVERTER</div>
+          <div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginTop:2}}>Theme & pipe defaults: ⚙ SETTINGS · Full instructions: 📖 GUIDE</div>
+        </div>
+        <div style={{display:'flex',gap:6,flexShrink:0}}>
+          <button onClick={()=>window.postMessage({type:'__activate_edit_mode'},'*')} style={{...btn,color:T.lime,borderColor:al(T.lime,0.5)}}>⚙ SETTINGS</button>
+          <button onClick={()=>window.open('help.html','_blank')} style={btn}>📖 GUIDE</button>
+        </div>
+      </div>
+    </div>
+    <div style={{flex:1,minHeight:0}}><ConvertTab/></div>
+  </div>);
+}
+
+// ─── CONVERT TAB ─────────────────────────────────────────────────────────────
+function ConvertTab(){
+  const[val,setVal]=useState(0),[mode,setMode]=useState('ftin'),[decIn,setDecIn]=useState(''),[mmIn,setMmIn]=useState('');
+  const rows=[{lbl:'Ft / In / Fracs',val:fmt(val),col:T.lime},{lbl:'Decimal Inches',val:fmtDec(val),col:T.fg},{lbl:'Millimeters',val:fmtMM(val),col:T.fg},{lbl:'Meters',val:fmtM(val),col:T.fg},{lbl:'Decimal Feet',val:fmtFtD(val),col:T.fg}];
+  return(<div style={{height:'100%',overflowY:'auto',padding:'13px 13px env(safe-area-inset-bottom,0)'}}>
+    <Ey ch="Input Mode"/>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginBottom:13}}>{[['FT/IN/FRAC','ftin'],['DECIMAL "','dec'],['MILLIMETERS','mm']].map(([lbl,m])=><button key={m} onClick={()=>setMode(m)} style={{height:40,borderRadius:3,border:`1px solid ${mode===m?T.lime:T.bdr}`,background:mode===m?al(T.lime,0.15):T.s2,color:mode===m?T.lime:T.fg2,fontFamily:FB,fontSize:10,fontWeight:mode===m?700:500,letterSpacing:'0.06em'}}>{lbl}</button>)}</div>
+    {mode==='ftin'&&<FtInEntry value={val} onChange={setVal} label="Enter Measurement"/>}
+    {mode==='dec'&&<div style={{marginBottom:13}}><Ey ch="Decimal Inches"/><input type="number" value={decIn} inputMode="decimal" placeholder="e.g. 66.750" onChange={e=>{setDecIn(e.target.value);const n=parseFloat(e.target.value);if(!isNaN(n))setVal(n);}} style={iSt()}/></div>}
+    {mode==='mm'&&<div style={{marginBottom:13}}><Ey ch="Millimeters"/><input type="number" value={mmIn} inputMode="decimal" placeholder="e.g. 1695.45" onChange={e=>{setMmIn(e.target.value);const n=parseFloat(e.target.value);if(!isNaN(n))setVal(n/25.4);}} style={iSt()}/></div>}
+    <Sep/><Ey ch="All Conversions"/>
+    <div style={{display:'flex',flexDirection:'column',gap:5}}>{rows.map(row=><div key={row.lbl} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',background:T.s1,borderRadius:3,border:`1px solid ${T.bdr}`}}><span style={{fontSize:9,fontFamily:FB,fontWeight:700,color:T.fg3,textTransform:'uppercase',letterSpacing:'0.1em'}}>{row.lbl}</span><span style={{fontSize:19,fontFamily:FM,fontWeight:700,color:row.col}}>{row.val}</span></div>)}</div>
+  </div>);
+}
+
+// ─── TOOLS TAB ────────────────────────────────────────────────────────────────
+function ToolsTab(){
+  const[sub,setSub]=useState('circ'),[sz,setSz]=useState('4"'),[customOD,setCustomOD]=useState(''),[useCustom,setUseCustom]=useState(false),[length,setLength]=useState(0),[accumItems,setAccumItems]=useState([]),[accumVal,setAccumVal]=useState(0),[accumLbl,setAccumLbl]=useState(''),[toolMat,setToolMat]=useState('CS A106 Gr.B');
+  const od=(useCustom&&customOD)?parseFloat(customOD)||4.5:(OD_TBL[sz]||4.5),circ=Math.PI*od,odArea=Math.PI*(od/2)**2,vol=odArea*(length*12),accumTotal=accumItems.reduce((s,i)=>s+i.v,0);
+  return(<div style={{display:'flex',flexDirection:'column',height:'100%'}}>
+    <div style={{display:'flex',background:T.s1,borderBottom:`1px solid ${T.bdr}`,flexShrink:0}}>
+      {[['circ','CIRC'],['area','AREA'],['vol','VOL'],['accum','ACCUM'],['flange','FLANGE'],['assy','ASSY']].map(([k,l])=><button key={k} onClick={()=>setSub(k)} style={{flex:1,height:40,borderBottom:`2px solid ${sub===k?T.lime:'transparent'}`,color:sub===k?T.lime:T.fg3,fontFamily:FM,fontSize:9,fontWeight:700,letterSpacing:'0.1em',background:'transparent',transition:'all .12s'}}>{l}</button>)}
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'13px 13px env(safe-area-inset-bottom,0)'}}>
+      {(sub==='circ'||sub==='area'||sub==='vol')&&<><Ey ch="Nominal Pipe Size"/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:9}}>{SIZES.map(s=><button key={s} onClick={()=>{setSz(s);setUseCustom(false);}} style={{padding:'5px 9px',borderRadius:3,border:`1px solid ${sz===s&&!useCustom?T.lime:T.bdr}`,background:sz===s&&!useCustom?al(T.lime,0.15):T.s2,color:sz===s&&!useCustom?T.lime:T.fg2,fontFamily:FM,fontSize:10,fontWeight:sz===s&&!useCustom?700:400}}>{s}</button>)}</div><div style={{marginBottom:13}}><Ey ch="Or Custom OD (in)"/><input type="number" value={customOD} inputMode="decimal" placeholder={`Default: ${OD_TBL[sz]||'—'}" OD`} onChange={e=>{setCustomOD(e.target.value);setUseCustom(!!e.target.value);}} style={iSt()}/></div></>}
+      {sub==='circ'&&<div style={{background:T.s1,borderRadius:3,border:`1px solid ${T.bdr}`,padding:'13px'}}><div style={{fontSize:10,fontFamily:FM,color:T.fg3,marginBottom:9}}>OD = <span style={{color:T.fg,fontWeight:700}}>{od.toFixed(3)}"</span></div>{[['Circumference',circ.toFixed(3)+'"',(circ*25.4).toFixed(1)+' mm',T.lime],['Radius',(od/2).toFixed(3)+'"',((od/2)*25.4).toFixed(1)+' mm',T.fg2]].map(([lbl,v1,v2,c])=><div key={lbl} style={{background:T.s2,borderRadius:3,padding:'11px',marginBottom:5}}><div style={{fontSize:8,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:3}}>{lbl}</div><div style={{fontSize:24,fontWeight:700,fontFamily:FM,color:c}}>{v1}</div><div style={{fontSize:10,fontFamily:FM,color:T.fg3,marginTop:2}}>{v2}</div></div>)}</div>}
+      {sub==='area'&&<div style={{background:T.s1,borderRadius:3,border:`1px solid ${T.bdr}`,padding:'13px'}}><div style={{fontSize:10,fontFamily:FM,color:T.fg3,marginBottom:9}}>OD = <span style={{color:T.fg,fontWeight:700}}>{od.toFixed(3)}"</span></div>{[['OD Cross-Section',odArea.toFixed(4)+' in²',(odArea*645.16).toFixed(1)+' mm²',T.lime],['Circumference',circ.toFixed(3)+'"',(circ*25.4).toFixed(1)+' mm',T.amb]].map(([lbl,v1,v2,c])=><div key={lbl} style={{background:T.s2,borderRadius:3,padding:'11px',marginBottom:5}}><div style={{fontSize:8,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:3}}>{lbl}</div><div style={{fontSize:22,fontWeight:700,fontFamily:FM,color:c}}>{v1}</div><div style={{fontSize:10,fontFamily:FM,color:T.fg3,marginTop:2}}>{v2}</div></div>)}</div>}
+      {sub==='vol'&&<><FtInEntry value={length} onChange={setLength} label="Pipe Length"/><div style={{marginTop:13,background:T.s1,borderRadius:3,border:`1px solid ${T.bdr}`,padding:'13px'}}><div style={{fontSize:8,color:T.fg3,fontFamily:FB,fontWeight:700,letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:9}}>OD-Based Volume</div><div style={{fontSize:30,fontWeight:700,fontFamily:FM,color:T.lime}}>{(vol/231).toFixed(4)} gal</div><div style={{fontSize:11,fontFamily:FM,color:T.fg3,marginTop:5}}>{vol.toFixed(3)} in³ · {(vol*16.387).toFixed(1)} cm³</div></div></>}
+      {sub==='flange'&&<FlangeCalc sz={sz} setSz={setSz} toolMat={toolMat} setToolMat={setToolMat}/>}
+      {sub==='assy'&&<AssyBrowser/>}
+      {sub==='accum'&&<><Ey ch="Running Accumulator"/><FtInEntry value={accumVal} onChange={setAccumVal}/><div style={{display:'flex',gap:7,marginTop:9,marginBottom:13}}><input value={accumLbl} onChange={e=>setAccumLbl(e.target.value)} placeholder="Label (optional)" style={{...iSt(),flex:1,fontSize:12,padding:'9px'}}/><button onClick={()=>{if(accumVal>0){setAccumItems(l=>[...l,{id:Date.now(),v:accumVal,lbl:accumLbl||`Item ${l.length+1}`}]);setAccumVal(0);setAccumLbl('');}}} style={{height:42,padding:'0 16px',borderRadius:3,background:T.lime,color:T.bg,fontFamily:FM,fontSize:13,fontWeight:700,flexShrink:0}}>ADD</button></div>{accumItems.length>0?<><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}><Ey ch={`${accumItems.length} Items`}/><button onClick={()=>setAccumItems([])} style={{fontSize:9,color:T.danger,fontFamily:FB,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>CLEAR</button></div>{accumItems.map((item,idx)=><div key={item.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px',background:T.s1,borderRadius:3,marginBottom:4,border:`1px solid ${T.bdr}`}}><div style={{display:'flex',alignItems:'center',gap:9}}><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{String(idx+1).padStart(2,'0')}</span><span style={{fontSize:11,fontFamily:FB,fontWeight:600,color:T.fg2}}>{item.lbl}</span></div><div style={{display:'flex',alignItems:'center',gap:11}}><span style={{fontSize:17,fontFamily:FM,fontWeight:700,color:T.lime}}>{fmt(item.v)}</span><button onClick={()=>setAccumItems(l=>l.filter(x=>x.id!==item.id))} style={{color:T.danger,fontSize:17,lineHeight:1}}>✕</button></div></div>)}<div style={{padding:'13px',background:al(T.lime,0.1),borderRadius:3,border:`1px solid ${al(T.lime,0.35)}`,marginTop:5}}><div style={{fontSize:8,color:T.lime,fontFamily:FB,fontWeight:700,letterSpacing:'0.15em',textTransform:'uppercase',marginBottom:3}}>TOTAL</div><div style={{fontSize:34,fontWeight:700,fontFamily:FM,color:T.lime,lineHeight:1}}>{fmt(accumTotal)}</div><div style={{display:'flex',gap:13,marginTop:5}}><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{fmtDec(accumTotal)}</span><span style={{fontSize:10,fontFamily:FM,color:T.fg3}}>{fmtMM(accumTotal)}</span></div></div></>:<div style={{textAlign:'center',padding:'28px 0',color:T.fg3,fontSize:9,fontFamily:FB,letterSpacing:'0.15em',textTransform:'uppercase'}}>No items yet</div>}</>}
+    </div>
+  </div>);
+}
+
+Object.assign(window,{Ey,Sep,iSt,sSt,Seg,FtInEntry,MatSelect,TapeTab,CutTab,ConvertTab,ToolsTab,MoreTab});
