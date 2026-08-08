@@ -177,7 +177,7 @@ function IsoEditor({job,dwg0,onChange,onBack}){
         <rect width="100%" height="100%" fill="url(#dgrid)"/>
         <g transform={`translate(${view.tx},${view.ty}) scale(${s})`}>
           {dwg.runs.map(r=>{const a=pts[r.a],b=pts[r.b];if(!a||!b)return null;
-            const ri=m.runsInfo.find(q=>q.run.id===r.id);
+            const ri=m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
             const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,px=-dy/L,py=dx/L;
             const lp=plan.runs[r.id];
             return(<g key={r.id}>
@@ -201,6 +201,7 @@ function IsoEditor({job,dwg0,onChange,onBack}){
               {f.type==='cap'&&<circle cx={p[0]} cy={p[1]} r={lw(5)} fill={T.fg}/>}
               {f.type==='flangeWN'&&<g><circle cx={p[0]} cy={p[1]} r={lw(6)} fill="none" stroke={T.fg} strokeWidth={lw(3)}/><circle cx={p[0]} cy={p[1]} r={lw(2)} fill={T.fg}/></g>}
               {(f.type==='tee')&&<circle cx={p[0]} cy={p[1]} r={lw(4)} fill={T.s1} stroke={T.lime} strokeWidth={lw(2)}/>}
+              {f.type==='olet'&&<g><circle cx={p[0]} cy={p[1]} r={lw(6)} fill={T.s1} stroke={T.amb} strokeWidth={lw(2)}/><circle cx={p[0]} cy={p[1]} r={lw(2)} fill={T.amb}/></g>}
               {ws.length>0&&(()=>{const wp=plan.welds[n.id];return(<g><circle cx={p[0]} cy={p[1]} r={lw(3)} fill={T.org}/>
                 <text x={wp?wp.x:p[0]+lw(9)} y={wp?wp.y+lw(3):p[1]-lw(8)} fontSize={lw(9)} fontFamily={FM} fill={T.org} textAnchor={wp?'middle':'start'}>{ws.map(w=>'W'+w.no+(w.sf==='F'?'·F':'')).join(' ')}</text></g>)})()}
               {n.id===dwg.activeEnd&&<circle cx={p[0]} cy={p[1]} r={lw(11)} fill="none" stroke={al(T.lime,0.5)} strokeWidth={lw(1.5)} strokeDasharray={`${lw(3)} ${lw(3)}`}/>}
@@ -258,41 +259,98 @@ function EndSheet({dwg,m,id,mut,setActive,delRun,onClose}){
 }
 function NodeSheet({dwg,m,id,mut,setActive,onClose}){
   const f=m.nodeFit[id];
-  const names={joint:'BUTT WELD JOINT',ell45:'45° ELBOW',ell90:'90° ELBOW LR',ell90sr:'90° ELBOW SR',tee:'TEE',cross:'CROSS — UNSUPPORTED',bendX:'NON-STD BEND'};
+  const olN=f.ol?(f.ol.t==='SOL'?'SOCKOLET':f.ol.t==='TOL'?'THREADOLET':'WELDOLET')+' — '+(f.ol.bs||'')+' BRANCH':'';
+  const names={joint:dwg.conn==='SW'?'SW COUPLING JOINT':'BUTT WELD JOINT',ell45:'45° ELBOW',ell90:'90° ELBOW LR',ell90sr:'90° ELBOW SR',tee:'TEE',cross:'CROSS — UNSUPPORTED',bendX:'NON-STD BEND',olet:olN};
   return(<BSheet title="FITTING" sub={names[f.type]||f.type} onClose={onClose}>
+    {f.type==='olet'&&<div style={{marginBottom:10}}>
+      {f.deg<3&&<div style={{marginBottom:8}}><BigBtn onClick={()=>{setActive(id);onClose()}}>⑂ DRAW THE BRANCH FROM HERE</BigBtn></div>}
+      <BigBtn ghost onClick={()=>{mut(d=>{delete d.oletOv[id]});onClose()}} style={{color:T.amb,border:`1px solid ${al(T.amb,0.5)}`,background:'none'}}>REMOVE OLET (BECOMES PLAIN JOINT)</BigBtn>
+    </div>}
     {(f.type==='ell90'||f.type==='ell90sr')&&<div style={{marginBottom:12}}><Ey ch="Elbow type"/>
       <Seg value={f.type==='ell90sr'?'sr':'lr'} options={[{v:'lr',lbl:'LONG RADIUS'},{v:'sr',lbl:'SHORT RADIUS'}]} onChange={v=>mut(d=>{if(v==='sr')d.fitOv[id]='ell90sr';else delete d.fitOv[id]})}/></div>}
-    {f.deg<3&&f.type!=='joint'&&<div style={{marginBottom:10}}><BigBtn onClick={()=>{setActive(id);onClose()}}>⑂ DRAW BRANCH FROM HERE (TEE)</BigBtn>
+    {f.deg<3&&f.type!=='joint'&&f.type!=='olet'&&<div style={{marginBottom:10}}><BigBtn onClick={()=>{setActive(id);onClose()}}>⑂ DRAW BRANCH FROM HERE (TEE)</BigBtn>
       <div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginTop:5,lineHeight:1.5}}>Sets this fitting as the start point — pick a direction and GO. A third leg turns it into a tee automatically.</div></div>}
     {f.type==='joint'&&<div style={{marginBottom:10}}><BigBtn onClick={()=>{setActive(id);onClose()}}>⑂ BRANCH HERE (WELDOLET / TEE)</BigBtn></div>}
     <WeldChips dwg={dwg} m={m} at={id} mut={mut}/>
   </BSheet>);
 }
 function RunSheet({dwg,m,id,mut,delRun,onEditLen,onClose}){
-  const r=dwg.runs.find(q=>q.id===id);const ri=m.runsInfo.find(q=>q.run.id===id);if(!r)return null;
-  const[vt,setVt]=uS('Gate');
-  const vs=dwg.valves[id]||[];
+  const r=dwg.runs.find(q=>q.id===id);
+  const ri=m.runsInfo.find(q=>q.runIds?q.runIds.includes(id):q.run.id===id);
+  if(!r)return null;
+  const[vt,setVt]=uS('Gate');const[vc,setVc]=uS('FLGD');
+  const[rk,setRk]=uS('CON');
+  const szIdx=SIZES.indexOf(dwg.size);
+  const smaller=SIZES.slice(0,Math.max(1,szIdx));
+  const[rto,setRto]=uS(smaller[smaller.length-1]||SIZES[0]);
+  const[ot,setOt]=uS('WOL');
+  const[obs,setObs]=uS(smaller[Math.max(0,smaller.length-2)]||SIZES[0]);
+  const[oletLen,setOletLen]=uS(false);
+  const vs=dwg.valves[id]||[];const rds=(dwg.reds||{})[id]||[];
+  function addOlet(dist){
+    if(!(dist>0&&dist<r.len))return;
+    mut(d=>{
+      d.oletOv=d.oletOv||{};d.reds=d.reds||{};
+      const rr=d.runs.find(q=>q.id===id);
+      const nid=d.nextId++,rid2=d.nextId++;
+      const oldB=rr.b,oldLen=rr.len;
+      rr.b=nid;rr.len=dist;
+      d.nodes.push({id:nid});
+      d.runs.splice(d.runs.findIndex(q=>q.id===id)+1,0,{id:rid2,a:nid,b:oldB,len:oldLen-dist,dir:[...rr.dir]});
+      d.oletOv[nid]={t:ot,bs:obs};
+      d.activeEnd=nid;
+    });
+    onClose();
+  }
   return(<BSheet title={'PIPE RUN — '+(ri?.mark||'')} sub={isoFmt(r.len)+' C-C'} onClose={onClose}>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-      {[['C-C LENGTH',isoFmt(ri.cc),T.fg],['CUT LENGTH',isoFmt(Math.max(0,ri.cut)),T.lime],['TAKEOUT A',isoFmt(ri.toA),T.fg2],['TAKEOUT B',isoFmt(ri.toB),T.fg2]].map(([l,v,c])=>(
+      {[['PIECE C-C',isoFmt(ri.cc),T.fg],['PIECE CUT',isoFmt(Math.max(0,ri.cut)),T.lime],['TAKEOUTS',isoFmt(ri.toA+ri.toB),T.fg2],['DEDUCTS (F-F)',isoFmt(ri.vff),T.fg2]].map(([l,v,c])=>(
         <div key={l} style={{background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:4,padding:'9px 11px'}}>
           <div style={{fontSize:7,fontFamily:FB,fontWeight:700,letterSpacing:'0.16em',color:T.fg3}}>{l}</div>
           <div style={{fontFamily:FM,fontSize:16,fontWeight:700,color:c,marginTop:3}}>{v}</div></div>))}
     </div>
     <div style={{marginBottom:12}}><BigBtn onClick={onEditLen}>EDIT LENGTH</BigBtn></div>
-    <Ey ch="Inline flanged valve"/>
-    <div style={{display:'flex',gap:6,marginBottom:8}}>
-      <select value={vt} onChange={e=>setVt(e.target.value)} style={{...sSt(),flex:1}}>{['Gate','Ball','Globe','Check','Butterfly'].map(v=><option key={v}>{v}</option>)}</select>
-      <button onClick={()=>mut(d=>{(d.valves[id]=d.valves[id]||[]).push({type:vt,ff:0})})} style={{padding:'0 18px',borderRadius:4,border:'none',background:T.lime,color:'#0A0B0D',fontFamily:FB,fontWeight:700,fontSize:12}}>+ ADD</button>
+
+    <Ey ch="Inline valve"/>
+    <div style={{display:'flex',gap:6,marginBottom:6}}>
+      <select value={vt} onChange={e=>setVt(e.target.value)} style={{...sSt(),flex:1}}>{['Gate','Ball','Globe','Check','Butterfly','Strainer'].map(v=><option key={v}>{v}</option>)}</select>
+      <button onClick={()=>mut(d=>{(d.valves[id]=d.valves[id]||[]).push({type:vt,conn:vc,ff:0})})} style={{padding:'0 18px',borderRadius:4,border:'none',background:T.lime,color:'#0A0B0D',fontFamily:FB,fontWeight:700,fontSize:12}}>+ ADD</button>
     </div>
+    <div style={{marginBottom:8}}><Seg value={vc} options={[{v:'FLGD',lbl:'FLANGED'},{v:'BW',lbl:'BUTT WELD'},{v:'SW',lbl:'SOCKET WELD'}]} onChange={setVc} sm/></div>
     {vs.map((v,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:8,background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:4,padding:'8px 10px',marginBottom:6}}>
-      <span style={{fontFamily:FM,fontSize:12,fontWeight:700,color:T.fg,flex:1}}>{v.type} valve · flgd</span>
+      <span style={{fontFamily:FM,fontSize:12,fontWeight:700,color:T.fg,flex:1,minWidth:0}}>{v.type} <span style={{color:T.lime,fontSize:10}}>{v.conn||'FLGD'}</span></span>
       <span style={{fontSize:9,fontFamily:FB,color:T.fg3}}>F-F</span>
       <input type="number" inputMode="decimal" value={v.ff||''} placeholder="in" onChange={e=>mut(d=>{d.valves[id][i].ff=parseFloat(e.target.value)||0},false)} style={{...iSt(),width:64,padding:'6px 8px',fontSize:12}}/>
       <button onClick={()=>mut(d=>{d.valves[id].splice(i,1);if(!d.valves[id].length)delete d.valves[id]})} style={{color:T.danger,fontSize:14,padding:'4px 6px'}}>✕</button>
     </div>))}
-    {vs.length>0&&<div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginBottom:10,lineHeight:1.5}}>Enter valve face-to-face so the cut length deducts it. Adds 2 WN flanges + 2 welds to the BOM.</div>}
+    {vs.length>0&&<div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginBottom:10,lineHeight:1.5}}>Enter valve face-to-face (inches) so the cut deducts it. Flanged valves add 2 flanges + gaskets + studs to the BOM; BW/SW add 2 welds.</div>}
+
+    <Ey ch="Inline reducer"/>
+    <div style={{display:'flex',gap:6,marginBottom:8,alignItems:'center'}}>
+      <div style={{flex:1}}><Seg value={rk} options={[{v:'CON',lbl:'CONC'},{v:'ECC',lbl:'ECC'}]} onChange={setRk} sm/></div>
+      <select value={rto} onChange={e=>setRto(e.target.value)} style={{...sSt(),width:88}}>{smaller.map(s=><option key={s}>{s}</option>)}</select>
+      <button onClick={()=>mut(d=>{d.reds=d.reds||{};(d.reds[id]=d.reds[id]||[]).push({kind:rk,to:rto,len:0})})} style={{padding:'9px 14px',borderRadius:4,border:'none',background:T.lime,color:'#0A0B0D',fontFamily:FB,fontWeight:700,fontSize:12}}>+ ADD</button>
+    </div>
+    {rds.map((rd,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:8,background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:4,padding:'8px 10px',marginBottom:6}}>
+      <span style={{fontFamily:FM,fontSize:12,fontWeight:700,color:T.fg,flex:1}}>{rd.kind==='ECC'?'ECC':'CONC'} RED {dwg.size} × {rd.to}</span>
+      <span style={{fontSize:9,fontFamily:FB,color:T.fg3}}>LEN</span>
+      <input type="number" inputMode="decimal" value={rd.len||''} placeholder="in" onChange={e=>mut(d=>{d.reds[id][i].len=parseFloat(e.target.value)||0},false)} style={{...iSt(),width:64,padding:'6px 8px',fontSize:12}}/>
+      <button onClick={()=>mut(d=>{d.reds[id].splice(i,1);if(!d.reds[id].length)delete d.reds[id]})} style={{color:T.danger,fontSize:14,padding:'4px 6px'}}>✕</button>
+    </div>))}
+    {rds.length>0&&<div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginBottom:10,lineHeight:1.5}}>Enter the reducer end-to-end length so the cut deducts it. Line size past the reducer stays {dwg.size} on this drawing — start a new ISO for the reduced side if needed.</div>}
+
+    <Ey ch="Olet branch — tap line at distance, then draw"/>
+    <div style={{display:'flex',gap:6,marginBottom:8,alignItems:'center'}}>
+      <div style={{flex:1}}><Seg value={ot} options={[{v:'WOL',lbl:'WELDOLET'},{v:'SOL',lbl:'SOCKOLET'},{v:'TOL',lbl:'THREADOLET'}]} onChange={setOt} sm/></div>
+      <select value={obs} onChange={e=>setObs(e.target.value)} style={{...sSt(),width:88}}>{smaller.map(s=><option key={s}>{s}</option>)}</select>
+    </div>
+    <div style={{marginBottom:12}}>
+      <BigBtn ghost onClick={()=>setOletLen(true)} style={{border:`1px solid ${al(T.amb,0.6)}`,color:T.amb,background:al(T.amb,0.07)}}>⊕ PLACE OLET — SET DISTANCE FROM START</BigBtn>
+      <div style={{fontSize:10,fontFamily:FB,color:T.fg3,marginTop:5,lineHeight:1.5}}>Splits the run at that distance and puts the olet there — then pick a direction on the compass and GO to draw the branch (pump discharge, drains, vents, gauges). The header stays one cut piece.</div>
+    </div>
+
     <BigBtn ghost onClick={()=>delRun(id)} style={{color:T.danger,border:`1px solid ${al(T.danger,0.5)}`,background:'none'}}>DELETE RUN</BigBtn>
+    {oletLen&&<LenSheet title="OLET — DISTANCE FROM RUN START" value={0} onSet={addOlet} onClose={()=>setOletLen(false)} goLabel="PLACE OLET"/>}
   </BSheet>);
 }
 function SpecSheet({dwg,mut,onClose}){
@@ -303,6 +361,8 @@ function SpecSheet({dwg,mut,onClose}){
     <Ey ch="Line number"/><input value={dwg.lineNo} onChange={e=>mut(d=>{d.lineNo=e.target.value},false)} style={inp}/>
     <Ey ch="Asset / area"/><input value={dwg.asset} placeholder="e.g. Cooker #2" onChange={e=>mut(d=>{d.asset=e.target.value},false)} style={inp}/>
     <Ey ch="Drawn by"/><input value={dwg.drawnBy} onChange={e=>mut(d=>{d.drawnBy=e.target.value},false)} style={inp}/>
+    <Ey ch="Connection — sets fittings & takeouts"/>
+    <div style={{marginBottom:10}}><Seg value={dwg.conn||'BW'} options={[{v:'BW',lbl:'BUTT WELD'},{v:'SW',lbl:'SOCKET WELD ≤4"'}]} onChange={v=>mut(d=>{d.conn=v})}/></div>
     <Ey ch="Size"/><div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>{SIZES.map(z=>chip(dwg.size,z,v=>mut(d=>{d.size=v})))}</div>
     <Ey ch="Material"/><div style={{marginBottom:10}}><MatSelect value={dwg.mat} onChange={v=>mut(d=>{d.mat=v})}/></div>
     <Ey ch="Schedule"/><div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:4}}>{SCHEDS.map(z=>chip(dwg.sch,z,v=>mut(d=>{d.sch=v})))}</div>

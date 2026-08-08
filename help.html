@@ -109,11 +109,24 @@ Tap <b>two perpendicular directions</b> (like N then E, or E then UP) before GO 
 <h3>Tap anything to edit it</h3>
 <table>
   <tr><th>Tap</th><th>What you can do</th></tr>
-  <tr><td>Run (pipe line)</td><td>Edit its length, add an inline flanged valve (enter face-to-face so the cut deducts it), or delete the run</td></tr>
+  <tr><td>Run (pipe line)</td><td>Edit length · add an <b>inline valve</b> (gate/ball/globe/check/butterfly/strainer — flanged, butt-weld, or socket-weld) · add an <b>inline reducer</b> (conc/ecc) · <b>place an olet</b> · delete the run</td></tr>
   <tr><td>Fitting</td><td>Switch LR / SR elbow, or <b>draw a branch</b> from it (makes a tee)</td></tr>
+  <tr><td>Olet (amber dot)</td><td>Draw the branch from it, or remove the olet</td></tr>
   <tr><td>Open end (glowing)</td><td>Set end treatment — OPEN / CAP / WN FLANGE — or make it the active drawing point</td></tr>
   <tr><td>Weld chip (W#)</td><td>Toggle each weld <b>SHOP ↔ FIELD</b></td></tr>
 </table>
+
+<h3>Olet branches — pump discharge, drains, vents, gauges</h3>
+<ol class="steps">
+  <li>Tap the header run, pick <b>WELDOLET / SOCKOLET / THREADOLET</b> and the branch size.</li>
+  <li>Tap <b>⊕ PLACE OLET</b> and enter the distance from the start of the run.</li>
+  <li>The olet lands on the line (amber dot) — pick a direction on the compass and <kbd>GO</kbd> to draw the branch.</li>
+</ol>
+<div class="card"><div class="cl">Cut list stays honest</div>
+The header pipe runs <b>through</b> the olet — it stays one cut piece with one mark, and the olet shows up in the BOM and weld map (branch attachment weld) without fake extra girth welds.</div>
+
+<h3>Butt weld vs socket weld</h3>
+<p>In <b>Drawing Setup</b> (tap the title bar) choose <b>BUTT WELD</b> or <b>SOCKET WELD ≤4"</b> for the whole line. SW mode uses B16.11 socket takeout dimensions and swaps the BOM to SW fittings.</p>
 
 <h3>View controls</h3>
 <p><kbd>↩ UNDO</kbd> steps back · <kbd>FIT</kbd> re-centers · <kbd>NE ⟳</kbd> rotates the view corner (NE / SE / SW / NW) with the north arrow tracking · drag to pan, pinch to zoom.</p>

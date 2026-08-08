@@ -15,10 +15,11 @@ function ValveSheet({sz,fitting,mat,open,onClose,vState,setVState}){
   const classAvail=bolts!==null;
   const vName=getValveName(fitting)||fitting;
   const vn=VALVE_NOTES[vName]||{note:'',recs:[]};
+  // Full valve bolt-up = TWO joints (one per side): 2 flanges, 2 gaskets, 2× studs
   const bom=isFlanged&&classAvail?[
     {qty:2,desc:`${sz} ${end} Flange ${cls} RF — ${fmat} (ASME B16.5)`},
-    {qty:1,desc:`${sz} ${cls} Gasket — ${gasket}`},
-    {qty:bolts,desc:`${studDia} dia Stud Bolt × 2H Nut — ${bmat}`},
+    {qty:2,desc:`${sz} ${cls} Gasket — ${gasket}`},
+    {qty:bolts*2,desc:`${studDia} dia Stud Bolt × 2H Nut — ${bmat} (${bolts} per joint × 2 joints)`},
   ]:[];
 
   // Prevent body scroll when open
@@ -104,7 +105,7 @@ function ValveSheet({sz,fitting,mat,open,onClose,vState,setVState}){
 
             {/* Auto-generated BOM */}
             <div style={{background:T.s2,borderRadius:4,border:`1px solid ${T.bdr}`,padding:'11px 13px',marginBottom:14}}>
-              <div style={{fontSize:8,fontFamily:FB,fontWeight:700,color:T.lime,letterSpacing:'0.18em',textTransform:'uppercase',marginBottom:8}}>AUTO-GENERATED MATERIAL — per bolted joint</div>
+              <div style={{fontSize:8,fontFamily:FB,fontWeight:700,color:T.lime,letterSpacing:'0.18em',textTransform:'uppercase',marginBottom:8}}>AUTO-GENERATED MATERIAL — FULL VALVE (2 BOLTED JOINTS)</div>
               {classAvail?bom.map((item,i)=>(
                 <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start',padding:'6px 0',borderBottom:i<bom.length-1?`1px solid ${T.bdr}`:'none'}}>
                   <span style={{fontFamily:FM,fontSize:14,fontWeight:700,color:T.lime,flexShrink:0,minWidth:26,paddingTop:1}}>{item.qty}×</span>
