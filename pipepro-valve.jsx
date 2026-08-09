@@ -9,7 +9,7 @@ function ValveSheet({sz,fitting,mat,open,onClose,vState,setVState}){
   const bolts=FL_BOLTS[sz]?.[ci]??null;
   const studDia=FL_STUD_DIA[sz]?.[ci]??null;
   const gasket=FL_GASKET[cls]??'—';
-  const fmat=getFitMat(mat||'CS A106 Gr.B','BW');
+  const fmat=getFitMat(mat||'CS A106 Gr.B','FORGED'); // flanges are forgings: A105 / A182 / B564 — never A234 wrought
   const bmat=getBoltMat(mat);
   const isFlanged=conn==='flanged';
   const classAvail=bolts!==null;
@@ -165,7 +165,7 @@ function FlangeCalc({sz,setSz,toolMat,setToolMat}){
   const bolts=FL_BOLTS[sz]?.[ci]??null;
   const studDia=FL_STUD_DIA[sz]?.[ci]??null;
   const gasket=FL_GASKET[cls]??'—';
-  const fmat=getFitMat(toolMat||'CS A106 Gr.B','BW');
+  const fmat=getFitMat(toolMat||'CS A106 Gr.B','FORGED'); // forged flange grades, not wrought fitting grades
   const bmat=getBoltMat(toolMat);
   const avail=bolts!==null;
   return(<>
