@@ -1,12 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>PipePro</title>
-  <meta http-equiv="refresh" content="0;url=PipePro.html">
-  <script>location.replace('PipePro.html');</script>
-  <style>body{background:#0A0B0D;color:#E8EDF2;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>PipePro — Get the App</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-apple.png">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0B0D;--s1:#0f1318;--s2:#1a1f26;--bdr:#2e3740;--lime:#A6CE39;--org:#E8631A;
+    --fg:#E8EDF2;--fg2:#9AAAB8;--fg3:#5a6a78;
+    --fd:'Saira Condensed','Arial Narrow',sans-serif;--fb:'Barlow',system-ui,sans-serif;--fm:'JetBrains Mono',monospace}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--fg);font:400 16px/1.6 var(--fb);-webkit-text-size-adjust:100%}
+  .wrap{max-width:560px;margin:0 auto;padding:28px 20px 60px}
+  .hero{text-align:center;padding:10px 0 22px}
+  .hero img{width:108px;height:108px;border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.6);margin-bottom:14px}
+  h1{font:italic 900 44px/0.95 var(--fd);text-transform:uppercase}
+  .sub{font:700 11px var(--fb);color:var(--lime);letter-spacing:0.26em;text-transform:uppercase;margin-top:6px}
+  .tag{color:var(--fg2);margin-top:12px;font-size:15px}
+  .cta{display:block;text-align:center;text-decoration:none;border-radius:6px;padding:17px 16px;margin:10px 0;
+    font:700 16px var(--fb);letter-spacing:0.05em}
+  .cta.go{background:var(--lime);color:var(--ink)}
+  .cta.ghost{background:var(--s2);color:var(--fg);border:1px solid var(--bdr)}
+  h2{font:italic 900 22px/1 var(--fd);text-transform:uppercase;letter-spacing:0.03em;margin:32px 0 12px;
+    padding-top:18px;border-top:1px solid var(--bdr)}
+  .feat{display:flex;gap:12px;background:var(--s1);border:1px solid var(--bdr);border-left:3px solid var(--lime);
+    border-radius:5px;padding:13px 15px;margin-bottom:9px}
+  .feat .ic{font-size:22px;flex-shrink:0;line-height:1.3}
+  .feat b{color:var(--fg)}
+  .feat div{color:var(--fg2);font-size:14px;line-height:1.5}
+  .steps{counter-reset:st;margin:6px 0}
+  .steps li{list-style:none;position:relative;padding:0 0 16px 48px;color:var(--fg2);font-size:15px}
+  .steps li::before{counter-increment:st;content:counter(st);position:absolute;left:0;top:-2px;
+    width:32px;height:32px;border-radius:50%;background:var(--lime);color:var(--ink);
+    font:700 16px/32px var(--fm);text-align:center}
+  .steps b{color:var(--fg)}
+  kbd{font:600 13px var(--fm);background:var(--s2);border:1px solid var(--bdr);border-radius:4px;padding:2px 8px;color:var(--fg)}
+  .note{background:rgba(232,99,26,.09);border:1px solid rgba(232,99,26,.3);border-radius:5px;padding:11px 14px;
+    color:var(--fg2);font-size:13.5px;margin-top:10px}
+  .note b{color:var(--org)}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--bdr);
+    font:600 10.5px var(--fb);color:var(--fg3);letter-spacing:0.08em;text-align:center}
+</style>
 </head>
-<body><a href="PipePro.html" style="color:#A6CE39">Opening PipePro…</a></body>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <img src="icon-192.png" alt="PipePro">
+    <h1>PipePro</h1>
+    <div class="sub">Steampunk Fabrication · Field Calculator</div>
+    <div class="tag">Draw the line. The BOM, cut list &amp; weld map build themselves.<br>Then text the shop a clean 2-sheet PDF fab package.</div>
+  </div>
+
+  <a class="cta go" href="PipePro.html">▶ &nbsp;OPEN PIPEPRO</a>
+  <a class="cta ghost" href="help.html">📖 &nbsp;FULL HOW-TO GUIDE</a>
+
+  <h2>Put it on your home screen</h2>
+  <ol class="steps">
+    <li>Tap <b>▶ OPEN PIPEPRO</b> above (must be in <b>Safari</b>)</li>
+    <li>Tap the <b>Share</b> button <kbd>&#x2BAD;</kbd> at the bottom of Safari</li>
+    <li>Scroll down, tap <b>Add to Home Screen</b>, then <b>Add</b></li>
+    <li>Launch from the new icon — full screen, <b>works offline</b> in the field</li>
+  </ol>
+  <div class="note"><b>Heads up:</b> do the Add to Home Screen from the app page itself (after tapping OPEN PIPEPRO), not from this page — that way the icon opens straight into the app.</div>
+
+  <h2>What it does</h2>
+  <div class="feat"><span class="ic">⌗</span><div><b>ISO spool drawings</b> — draw pipe runs with a compass pad (N/S/E/W/UP/DN, 45° offsets), tap fittings to edit. Valves, olets, reducers, socket weld or butt weld.</div></div>
+  <div class="feat"><span class="ic">📄</span><div><b>PDF fab sheets</b> — one tap makes a bordered 2-sheet package: iso drawing + BOM, cut list, and shop/field weld map. AirDrop or text it to the shop.</div></div>
+  <div class="feat"><span class="ic">✂</span><div><b>Cut calculator</b> — takeouts per ASME B16.9/B16.11 for any size, material, and end fitting. Center-to-center in, cut length out.</div></div>
+  <div class="feat"><span class="ic">⊞</span><div><b>Tape calculator</b> — feet-inches-sixteenths math with running totals and history. No more napkin arithmetic.</div></div>
+  <div class="feat"><span class="ic">◯</span><div><b>Tools</b> — flange bolt-up (count, stud size, gasket, material per B16.5), pipe circumference &amp; volume, process assembly checklists, unit converter.</div></div>
+
+  <div class="foot">STEAMPUNK FABRICATION · HAZLEHURST, MS · (601) 757-3377 · 24/7</div>
+</div>
+</body>
 </html>
