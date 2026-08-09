@@ -115,7 +115,7 @@ function IsoEditor({job,dwg0,onChange,onBack}){
   // gestures
   const ge=uR({ptrs:new Map(),moved:false,start:null,pinch:null});
   function wpt(e){const r=svgRef.current.getBoundingClientRect();return[(e.clientX-r.left-view.tx)/view.s,(e.clientY-r.top-view.ty)/view.s]}
-  function pd(e){e.target.setPointerCapture&&svgRef.current.setPointerCapture(e.pointerId);
+  function pd(e){try{svgRef.current.setPointerCapture(e.pointerId)}catch(err){/* pointer already gone — never break the gesture chain */}
     ge.current.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(ge.current.ptrs.size===1){ge.current.moved=false;ge.current.start={x:e.clientX,y:e.clientY,tx:view.tx,ty:view.ty}}
     else if(ge.current.ptrs.size===2){const[p1,p2]=[...ge.current.ptrs.values()];ge.current.pinch={d:Math.hypot(p1.x-p2.x,p1.y-p2.y),s:view.s,cx:(p1.x+p2.x)/2,cy:(p1.y+p2.y)/2,tx:view.tx,ty:view.ty}}}
