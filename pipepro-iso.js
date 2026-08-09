@@ -111,10 +111,10 @@ function computeModel(d){
   const welds=[];const emitted={};
   // olets carry TWO welds (attachment groove to header + branch joint) except
   // threadolets, whose branch connection is threaded — one attachment weld only
-  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,open:0,cross:0,bendX:2};
+  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,flangeSO:2,blindFlg:1,capTHD:0,open:0,cross:0,bendX:2};
   const fitName=isSW
-    ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',bendX:'NON-STD BEND'}
-    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',bendX:'NON-STD BEND'};
+    ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',flangeSO:'SW FLANGE',blindFlg:'SW FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'}
+    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',flangeSO:'SO FLG FILLET',blindFlg:'WN FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'};
   function emitNode(id){if(emitted[id])return;emitted[id]=1;const f=nodeFit[id];
     if(f.type==='olet'){
       const nm=oletName(f.ol);
@@ -139,6 +139,11 @@ function computeModel(d){
       const key='r'+r.id+'-'+i+'a',key2='r'+r.id+'-'+i+'b';
       welds.push({key,no:welds.length+1,at:r.id,desc:nm+' 1',sf:d.sfOv?.[key]||'S'});
       welds.push({key:key2,no:welds.length+1,at:r.id,desc:nm+' 2',sf:d.sfOv?.[key2]||'S'});
+    });
+    ((d.flgs||{})[r.id]||[]).forEach((fl,i)=>{
+      const key='f'+r.id+'-'+i+'a',key2='f'+r.id+'-'+i+'b';
+      welds.push({key,no:welds.length+1,at:r.id,desc:'BRKOUT FLG 1',sf:d.sfOv?.[key]||'S'});
+      welds.push({key:key2,no:welds.length+1,at:r.id,desc:'BRKOUT FLG 2',sf:d.sfOv?.[key2]||'S'});
     });
   emitNode(r.b)});
   // cut list — header runs continue THROUGH olets, so runs joined by an olet
@@ -191,8 +196,8 @@ function isoBOM(d,m){
   });
   // fittings counted at the size of the pipe passing through them
   const fitDesc=(type,sz)=>isSW
-    ?({ell90:'SW 90° ELL '+sz,ell90sr:'SW 90° ELL '+sz,ell45:'SW 45° ELL '+sz,tee:'SW TEE '+sz,cap:'SW CAP '+sz,flangeWN:'SW FLANGE '+sz,joint:'SW FULL COUPLING '+sz})[type]
-    :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz})[type];
+    ?({ell90:'SW 90° ELL '+sz,ell90sr:'SW 90° ELL '+sz,ell45:'SW 45° ELL '+sz,tee:'SW TEE '+sz,cap:'SW CAP '+sz,flangeWN:'SW FLANGE '+sz,flangeSO:'SW FLANGE '+sz,blindFlg:'BLIND END SET '+sz+' (SW flg + blind + gskt + studs)',capTHD:'THD CAP '+sz,joint:'SW FULL COUPLING '+sz})[type]
+    :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz,flangeSO:'SO FLANGE '+sz,blindFlg:'BLIND END SET '+sz+' (WN flg + blind + gskt + studs)',capTHD:'THD CAP '+sz})[type];
   const counts={};
   Object.values(m.nodeFit).forEach(f=>{
     const desc=fitDesc(f.type,f.sz||d.size);
@@ -224,6 +229,17 @@ function isoBOM(d,m){
     const sz=(m.runSize&&m.runSize[rid])||d.size;
     items.push({qty:1,desc:(rd.kind==='ECC'?'ECC':'CON')+' REDUCER '+sz+' x '+rd.to+(isSW?' SW':' BW')});
   }));
+  // breakout flange pairs — full bolted joint hardware per set
+  const brkBySize={};
+  Object.entries(d.flgs||{}).forEach(([rid,list])=>{
+    const sz=(m.runSize&&m.runSize[rid])||d.size;
+    brkBySize[sz]=(brkBySize[sz]||0)+list.length;
+  });
+  Object.entries(brkBySize).forEach(([sz,n])=>{
+    items.push({qty:n*2,desc:(isSW?'SW':'WN')+' FLANGE '+sz+' (breakout pair)'});
+    items.push({qty:n,desc:'GASKET '+sz+' (breakout)'});
+    items.push({qty:n,desc:'STUD BOLT SET '+sz+' — count/dia per class: TOOLS > FLANGE'});
+  });
   const s=m.welds.filter(w=>w.sf==='S').length,f=m.welds.length-s;
   if(m.welds.length)items.push({qty:m.welds.length,desc:(isSW?'SW':'BW')+' WELDS — '+s+' SHOP / '+f+' FIELD'});
   return items;
@@ -235,7 +251,7 @@ function isoNewDrawing(st,defaults){
   const n=st.seq++;const pad=String(n).padStart(3,'0');
   return{id:'d'+Date.now(),name:'ISO-'+pad,lineNo:(defaults.size||'4"')+'-'+pad,size:defaults.size||'4"',mat:defaults.mat||'CS A106 Gr.B',sch:defaults.sch||'Sch 40',
     corner:'NE',asset:'',drawnBy:st.drawnBy||'',created:Date.now(),updated:Date.now(),conn:'BW',
-    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},sfOv:{},valves:{},reds:{},oletOv:{},activeEnd:1};
+    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},activeEnd:1};
 }
 // ── Label layout: collision-avoiding placement (run dims + weld tags) ──
 function _segRectHit(a,b,R){
@@ -341,14 +357,19 @@ function buildPrintSVG(d,m,widthPx){
   d.nodes.forEach(n=>{const f=m.nodeFit[n.id];if(!f)return;const[x,y]=P(m.pos[n.id]);
     if(f.type==='open'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.5}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`}
     else if(f.type==='cap'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.4}" fill="#000"/>`}
-    else if(f.type==='flangeWN'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/>`}
+    else if(f.type==='flangeWN'||f.type==='flangeSO'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/>`}
+    else if(f.type==='blindFlg'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/><circle cx="${x}" cy="${y}" r="${fs*0.2}" fill="#000"/>`}
+    else if(f.type==='capTHD'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.35}" fill="#000"/>`}
     else if(f.type==='olet'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.38}" fill="#fff" stroke="#000" stroke-width="${lw*1.4}"/><circle cx="${x}" cy="${y}" r="${fs*0.14}" fill="#000"/>`}
   });
-  // weld dots + labels
+  // weld dots + labels — shop weld: filled dot; field weld: open dot flagged FW
   const at={};m.welds.forEach(w=>{if(typeof w.at!=='number'&&!m.pos[w.at])return;const p=m.pos[w.at];if(!p)return;(at[w.at]=at[w.at]||[]).push(w)});
   Object.keys(at).forEach(id=>{const[x,y]=P(m.pos[id]);const ws=at[id];
-    s+=`<circle cx="${x}" cy="${y}" r="${fs*0.32}" fill="#000"/>`;
-    const lbl=ws.map(w=>'W'+w.no+(w.sf==='F'?'·F':'')).join(' ');
+    const anyField=ws.some(w=>w.sf==='F');
+    s+=anyField
+      ?`<circle cx="${x}" cy="${y}" r="${fs*0.32}" fill="#fff" stroke="#000" stroke-width="${lw*1.2}"/>`
+      :`<circle cx="${x}" cy="${y}" r="${fs*0.32}" fill="#000"/>`;
+    const lbl=ws.map(w=>'W'+w.no+(w.sf==='F'?' FW':'')).join(' ');
     const wp=plan.welds[id];
     s+=`<text x="${wp?wp.x:x+fs*0.8}" y="${wp?wp.y+fs*0.28:y-fs*0.7}" font-size="${fs*0.78}" font-family="Helvetica" text-anchor="${wp?'middle':'start'}" fill="#000">${lbl}</text>`});
   return{svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W*sc} ${H*sc}" width="${W*sc}" height="${H*sc}"><rect width="100%" height="100%" fill="#fff"/>${s}</svg>`,w:W*sc,h:H*sc};
