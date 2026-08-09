@@ -111,10 +111,12 @@ function computeModel(d){
   const welds=[];const emitted={};
   // olets carry TWO welds (attachment groove to header + branch joint) except
   // threadolets, whose branch connection is threaded — one attachment weld only
-  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,flangeSO:2,blindFlg:1,capTHD:0,open:0,cross:0,bendX:2};
+  // SO flange = ONE weld-map joint (it takes two fillet passes — hub + face —
+  // but it counts and gets tracked as a single joint, not two)
+  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,flangeSO:1,blindFlg:1,capTHD:0,open:0,cross:0,bendX:2};
   const fitName=isSW
     ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',flangeSO:'SW FLANGE',blindFlg:'SW FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'}
-    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',flangeSO:'SO FLG FILLET',blindFlg:'WN FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'};
+    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',flangeSO:'SO FLG (DBL FILLET)',blindFlg:'WN FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'};
   function emitNode(id){if(emitted[id])return;emitted[id]=1;const f=nodeFit[id];
     if(f.type==='olet'){
       const nm=oletName(f.ol);
@@ -126,10 +128,12 @@ function computeModel(d){
     const n=wcount[f.type]||0;
     for(let k=0;k<n;k++){const key=id+'-'+k;
       welds.push({key,no:welds.length+1,at:id,desc:fitName[f.type]||f.type,sf:d.sfOv?.[key]||'S'})}}
-  const vlvLbl={FLGD:'VLV FLG',BW:'VLV BW',SW:'VLV SW'};
+  const vlvLbl={FLGD:'FLG',BW:'BW',SW:'SW',THD:'THD'};
   d.runs.forEach(r=>{emitNode(r.a);
     (d.valves?.[r.id]||[]).forEach((v,i)=>{
-      const lbl=vlvLbl[v.conn||'FLGD']||'VLV FLG';
+      const conn=v.conn||'FLGD';
+      if(conn==='THD')return; // threaded parts screw on — no welds
+      const lbl=vlvLbl[conn]||'FLG';
       const key='v'+r.id+'-'+i+'a',key2='v'+r.id+'-'+i+'b';
       welds.push({key,no:welds.length+1,at:r.id,desc:v.type+' '+lbl+' 1',sf:d.sfOv?.[key]||'S'});
       welds.push({key:key2,no:welds.length+1,at:r.id,desc:v.type+' '+lbl+' 2',sf:d.sfOv?.[key2]||'S'});
@@ -214,9 +218,11 @@ function isoBOM(d,m){
   Object.entries(olCounts).forEach(([k,q])=>items.push({qty:q,desc:k}));
   // valves — sized to their run; bolt-up hardware only for flanged (2 joints per valve)
   const flgBySize={};
+  const SPECIALTY=['Expansion Joint','Union','Swage Nipple'];
   Object.entries(d.valves||{}).forEach(([rid,list])=>list.forEach(v=>{
     const c=v.conn||'FLGD';const sz=(m.runSize&&m.runSize[rid])||d.size;
-    items.push({qty:1,desc:v.type.toUpperCase()+' VALVE '+sz+' '+c+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
+    const noun=SPECIALTY.includes(v.type)?'':' VALVE';
+    items.push({qty:1,desc:v.type.toUpperCase()+noun+' '+sz+' '+c+(v.cls&&c==='FLGD'?' '+v.cls:'')+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
     if(c==='FLGD')flgBySize[sz]=(flgBySize[sz]||0)+1;
   }));
   Object.entries(flgBySize).forEach(([sz,n])=>{

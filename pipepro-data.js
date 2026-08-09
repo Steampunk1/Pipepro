@@ -121,7 +121,7 @@ function getTO(t,sz){
   if(t.startsWith('SW ')||t==='Sockolet'){if(t.includes('90°')||t==='Sockolet')return SW90[sz]??0.88*D;if(t.includes('45°'))return SW45[sz]??0.5*D;return SWCO[sz]??0.44*D;}
   if(t.startsWith('THD ')||t==='Thredolet'){if(t.includes('90°')||t==='Thredolet')return(SW90[sz]??0.88*D)+0.0625;if(t.includes('45°'))return(SW45[sz]??0.5*D)+0.0625;return(SWCO[sz]??0.44*D)+0.0625;}
   // B16.9 table values for wrought fittings (formulas only as >24" fallback)
-  const bm={'90° Elbow LR':TO_90LR[D]??1.5*D,'90° Elbow SR':TO_90SR[D]??D,'45° Elbow':TO_45[D]??0.625*D,'Tee':TO_TEE[D]??D,'Reducing Tee':TO_TEE[D]??D,'Weld Cap':0.5*D,'Flange WN':0,'Flange SO':0,'Flange Blind':0,'Reducer Con':0.5*D,'Reducer Ecc':0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
+  const bm={'90° Elbow LR':TO_90LR[D]??1.5*D,'90° Elbow SR':TO_90SR[D]??D,'45° Elbow':TO_45[D]??0.625*D,'Tee':TO_TEE[D]??D,'Reducing Tee':TO_TEE[D]??D,'Weld Cap':0.5*D,'Flange WN':0,'Flange SO':0,'Flange Blind':0,'Reducer Con':0.5*D,'Reducer Ecc':0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'Plug Valve':2.5*D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Union':0,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
   return bm[t]??0;
 }
 function getFitMat(m,conn){
