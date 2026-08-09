@@ -5,11 +5,7 @@ function v3(a,b,f){return[a[0]+f*b[0],a[1]+f*b[1],a[2]+f*b[2]]}
 function vDot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
 function vNorm(a){const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l]}
 function combineDirs(keys){if(!keys.length)return null;const s=keys.reduce((acc,k)=>v3(acc,ISO_DIRS[k],1),[0,0,0]);if(Math.hypot(...s)<0.5)return null;return vNorm(s)}
-// ── B16.9 / B16.5 takeouts (center-to-face, inches, by NPS) ──
-const TO_90LR={0.5:1.5,0.75:1.125,1:1.5,1.25:1.875,1.5:2.25,2:3,2.5:3.75,3:4.5,4:6,6:9,8:12,10:15,12:18,14:21,16:24,18:27,20:30,24:36};
-const TO_90SR={1:1,1.25:1.25,1.5:1.5,2:2,2.5:2.5,3:3,4:4,6:6,8:8,10:10,12:12,14:14,16:16,18:18,20:20,24:24};
-const TO_45={0.5:0.625,0.75:0.75,1:0.875,1.25:1,1.5:1.125,2:1.375,2.5:1.75,3:2,4:2.5,6:3.75,8:5,10:6.25,12:7.5,14:8.75,16:10,18:11.25,20:12.5,24:15};
-const TO_TEE={0.5:1,0.75:1.125,1:1.5,1.25:1.875,1.5:2.25,2:2.5,2.5:3,3:3.375,4:4.125,6:5.625,8:7,10:8.5,12:10,14:11,16:12,18:13.5,20:15,24:17};
+// ── Takeouts: B16.9 tables (TO_*) live in pipepro-data.js — shared with getTO ──
 function isoTakeout(fitType,nps,sw,size){
   if(sw){ // socket-weld takeouts by size string (B16.11 center-to-socket)
     const sw90=(typeof SW90!=='undefined'?SW90[size]:undefined),sw45=(typeof SW45!=='undefined'?SW45[size]:undefined);
@@ -75,23 +71,61 @@ function computeModel(d){
       nodeFit[n.id]={type:'tee',deg,headerRuns:[rs[hi].id,rs[hj].id],branchRun:rs[bk].id};
     }else{nodeFit[n.id]={type:'cross',deg};warn.push('Node '+n.id+': '+deg+'-way — not supported')}
   });
-  // takeout for a run at a node
-  const nps=(typeof NPS!=='undefined'&&NPS[d.size])||parseFloat(d.size)||2;
+  // per-run line size: olet branches (and everything drawn beyond them) run at
+  // the olet's branch size, not the header size — flood-fill from each branch
+  const runSize={};d.runs.forEach(r=>{runSize[r.id]=d.size});
+  d.nodes.forEach(n=>{ // creation order, so an olet nested on a branch overrides its own subtree
+    const f=nodeFit[n.id];
+    if(!f||f.type!=='olet'||f.branchRun==null||!f.ol||!f.ol.bs)return;
+    const blocked=new Set(f.headerRuns);
+    const seen=new Set([f.branchRun]);const q=[f.branchRun];
+    while(q.length){
+      const rid=q.shift();runSize[rid]=f.ol.bs;
+      const r=d.runs.find(x=>x.id===rid);if(!r)continue;
+      [r.a,r.b].forEach(nid=>{(runsBy[nid]||[]).forEach(rr=>{
+        if(!blocked.has(rr.id)&&!seen.has(rr.id)){seen.add(rr.id);q.push(rr.id)}})});
+    }
+  });
+  // node size = size of the pipe passing through it (branch nodes shrink with the branch)
+  Object.keys(nodeFit).forEach(k=>{
+    const rs=runsBy[k]||[];const f=nodeFit[k];
+    f.sz=rs.length?(f.type==='olet'?runSize[(f.headerRuns&&f.headerRuns[0])??rs[0].id]:runSize[rs[0].id]):d.size;
+  });
+  const npsOf=sz=>((typeof NPS!=='undefined'&&NPS[sz])||parseFloat(sz)||2);
+  // takeout for a run at a node — sized to that run's line size
   function toAt(nodeId,runId){const f=nodeFit[nodeId];if(!f)return 0;
-    if(f.type==='olet')return 0;
-    if(f.type==='tee')return isoTakeout('tee',nps,isSW,d.size);
-    return isoTakeout(f.type,nps,isSW,d.size);
+    const sz=runSize[runId]||d.size;
+    if(f.type==='olet'){
+      // header runs pass straight through (0); the BRANCH seats on the header —
+      // deduct header OD/2 (to the header surface; olet stand-out is mfr-specific)
+      if(f.branchRun===runId){
+        const hsz=runSize[(f.headerRuns&&f.headerRuns[0])??runId]||d.size;
+        return ((typeof OD_TBL!=='undefined'&&OD_TBL[hsz])||npsOf(hsz))/2;
+      }
+      return 0;
+    }
+    return isoTakeout(f.type,npsOf(sz),isSW,sz);
   }
+  if(Object.keys(oletOv).length)warn.push('Olet branch cuts deduct header OD/2 only — verify olet stand-out per mfr before cutting');
   // welds walk (numbering follows build order), stable keys for S/F flags
   const welds=[];const emitted={};
-  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,open:0,cross:0,bendX:2,olet:1};
+  // olets carry TWO welds (attachment groove to header + branch joint) except
+  // threadolets, whose branch connection is threaded — one attachment weld only
+  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,open:0,cross:0,bendX:2};
   const fitName=isSW
     ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',bendX:'NON-STD BEND'}
     :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',bendX:'NON-STD BEND'};
-  const oletName=o=>o?(o.t==='SOL'?'SOCKOLET':o.t==='TOL'?'THREDOLET':'WELDOLET')+(o.bs?' '+o.bs:''):'OLET';
-  function emitNode(id){if(emitted[id])return;emitted[id]=1;const f=nodeFit[id];const n=wcount[f.type]||0;
+  function emitNode(id){if(emitted[id])return;emitted[id]=1;const f=nodeFit[id];
+    if(f.type==='olet'){
+      const nm=oletName(f.ol);
+      const descs=f.ol&&f.ol.t==='TOL'?[nm+' ATTACH']:[nm+' ATTACH',nm+(f.ol&&f.ol.t==='SOL'?' BRANCH SW':' BRANCH BW')];
+      descs.forEach((desc,k)=>{const key=id+'-'+k;
+        welds.push({key,no:welds.length+1,at:id,desc,sf:d.sfOv?.[key]||'S'})});
+      return;
+    }
+    const n=wcount[f.type]||0;
     for(let k=0;k<n;k++){const key=id+'-'+k;
-      welds.push({key,no:welds.length+1,at:id,desc:f.type==='olet'?oletName(f.ol):(fitName[f.type]||f.type),sf:d.sfOv?.[key]||'S'})}}
+      welds.push({key,no:welds.length+1,at:id,desc:fitName[f.type]||f.type,sf:d.sfOv?.[key]||'S'})}}
   const vlvLbl={FLGD:'VLV FLG',BW:'VLV BW',SW:'VLV SW'};
   d.runs.forEach(r=>{emitNode(r.a);
     (d.valves?.[r.id]||[]).forEach((v,i)=>{
@@ -118,64 +152,78 @@ function computeModel(d){
   d.runs.forEach(r=>{parent[r.id]=r.id});
   Object.values(nodeFit).forEach(f=>{
     if(f&&f.type==='olet'&&f.headerRuns){const[a,b]=f.headerRuns;if(a!=null&&b!=null&&a!==b)parent[find(a)]=find(b)}});
-  const oletNodes=new Set();
-  Object.keys(nodeFit).forEach(k=>{if(nodeFit[k].type==='olet')oletNodes.add(Number(k))});
   const groups=new Map();
   perRun.forEach(pr=>{const g=find(pr.run.id);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(pr)});
-  const runsInfo=[];let pi=1;
+  const runsInfo=[];const perRunMap={};let pi=1;
   for(const prs of groups.values()){
     const cc=prs.reduce((s,p)=>s+p.run.len,0);
     const ded=prs.reduce((s,p)=>s+p.ded,0);
-    let to=0;
-    prs.forEach(p=>{
-      [['a','toA'],['b','toB']].forEach(([end,key])=>{
-        const nid=p.run[end];
-        const shared=oletNodes.has(nid)&&prs.filter(q=>q.run.a===nid||q.run.b===nid).length>1;
-        if(!shared)to+=p[key];
-      });
-    });
+    // toAt already returns 0 at internal olet junctions, so a plain sum is the piece takeout
+    const to=prs.reduce((s,p)=>s+p.toA+p.toB,0);
     const cut=cc-to-ded;
     if(cut<0)warn.push('P'+pi+': cut length negative — run shorter than takeouts');
-    runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark:'P'+pi,cc,toA:to,toB:0,vff:ded,cut});
+    // label the piece on its longest segment only, so split headers don't print the mark twice
+    const labelRun=prs.reduce((m2,p)=>p.run.len>m2.run.len?p:m2,prs[0]).run.id;
+    const ri={run:prs[0].run,runIds:prs.map(p=>p.run.id),mark:'P'+pi,cc,toA:to,toB:0,vff:ded,cut,size:runSize[prs[0].run.id]||d.size,labelRun};
+    runsInfo.push(ri);
+    prs.forEach(p=>{perRunMap[p.run.id]={toA:p.toA,toB:p.toB,ded:p.ded,ri}});
     pi++;
   }
+  // reducers change line size, but downstream runs stay at the drawn size — surface the trap
+  d.runs.forEach(r=>{
+    if((redsMap[r.id]||[]).length){
+      const contA=(runsBy[r.a]||[]).length>1,contB=(runsBy[r.b]||[]).length>1;
+      if(contA&&contB){const ri=perRunMap[r.id];warn.push((ri?ri.ri.mark:'Run')+': line continues past a reducer — takeouts & BOM stay at '+ (runSize[r.id]||d.size) +'; draw the reduced side as its own ISO');}
+    }
+  });
   const openEnds=d.nodes.filter(n=>nodeFit[n.id]&&nodeFit[n.id].deg<=1&&nodeFit[n.id].type==='open').map(n=>n.id);
-  return{pos,runsBy,nodeFit,welds,runsInfo,openEnds,warn,nps};
+  return{pos,runsBy,nodeFit,welds,runsInfo,perRun:perRunMap,runSize,openEnds,warn,nps:npsOf(d.size)};
 }
 // ── BOM ──
 function isoBOM(d,m){
   const isSW=d.conn==='SW';
-  const items=[];const spec=d.size+' '+(d.mat||'')+' '+(d.sch||'');
-  const totCut=m.runsInfo.reduce((s,ri)=>s+Math.max(0,ri.cut),0);
-  if(totCut>0)items.push({qty:isoFmt(totCut),desc:'PIPE '+spec+' (net cut)'});
-  const counts={};Object.values(m.nodeFit).forEach(f=>{counts[f.type]=(counts[f.type]||0)+1});
-  const map=isSW
-    ?{ell90:'SW 90° ELL '+d.size,ell90sr:'SW 90° ELL '+d.size,ell45:'SW 45° ELL '+d.size,tee:'SW TEE '+d.size,cap:'SW CAP '+d.size,flangeWN:'SW FLANGE '+d.size,joint:'SW FULL COUPLING '+d.size}
-    :{ell90:'90° LR ELL '+d.size+' BW',ell90sr:'90° SR ELL '+d.size+' BW',ell45:'45° ELL '+d.size+' BW',tee:'TEE '+d.size+' BW',cap:'CAP '+d.size+' BW',flangeWN:'WN FLANGE '+d.size};
-  Object.keys(map).forEach(k=>{if(counts[k])items.push({qty:counts[k],desc:map[k]})});
-  // olets (weldolet / sockolet / thredolet), header size x branch size
+  const items=[];
+  // pipe: net cut grouped by line size (olet branches buy at branch size)
+  const cutBySize={};
+  m.runsInfo.forEach(ri=>{const sz=ri.size||d.size;cutBySize[sz]=(cutBySize[sz]||0)+Math.max(0,ri.cut)});
+  Object.entries(cutBySize).forEach(([sz,cut])=>{
+    if(cut>0)items.push({qty:isoFmt(cut),desc:'PIPE '+sz+' '+(d.mat||'')+' '+(d.sch||'')+' (net cut)'});
+  });
+  // fittings counted at the size of the pipe passing through them
+  const fitDesc=(type,sz)=>isSW
+    ?({ell90:'SW 90° ELL '+sz,ell90sr:'SW 90° ELL '+sz,ell45:'SW 45° ELL '+sz,tee:'SW TEE '+sz,cap:'SW CAP '+sz,flangeWN:'SW FLANGE '+sz,joint:'SW FULL COUPLING '+sz})[type]
+    :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz})[type];
+  const counts={};
+  Object.values(m.nodeFit).forEach(f=>{
+    const desc=fitDesc(f.type,f.sz||d.size);
+    if(desc)counts[desc]=(counts[desc]||0)+1;
+  });
+  Object.entries(counts).forEach(([desc,q])=>items.push({qty:q,desc}));
+  // olets, header size x branch size
   const olCounts={};
   Object.values(m.nodeFit).forEach(f=>{
     if(f.type==='olet'&&f.ol){
-      const k=(f.ol.t==='SOL'?'SOCKOLET':f.ol.t==='TOL'?'THREDOLET':'WELDOLET')+' '+d.size+' x '+(f.ol.bs||d.size);
+      const k=oletName({t:f.ol.t}).replace(/ $/,'')+' '+(f.sz||d.size)+' x '+(f.ol.bs||d.size);
       olCounts[k]=(olCounts[k]||0)+1;
     }});
   Object.entries(olCounts).forEach(([k,q])=>items.push({qty:q,desc:k}));
-  // valves — bolt-up hardware only for flanged ones (2 joints per valve)
-  let vlvFlg=0;
-  Object.values(d.valves||{}).forEach(list=>list.forEach(v=>{
-    const c=v.conn||'FLGD';
-    items.push({qty:1,desc:v.type.toUpperCase()+' VALVE '+d.size+' '+c+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
-    if(c==='FLGD')vlvFlg++;
+  // valves — sized to their run; bolt-up hardware only for flanged (2 joints per valve)
+  const flgBySize={};
+  Object.entries(d.valves||{}).forEach(([rid,list])=>list.forEach(v=>{
+    const c=v.conn||'FLGD';const sz=(m.runSize&&m.runSize[rid])||d.size;
+    items.push({qty:1,desc:v.type.toUpperCase()+' VALVE '+sz+' '+c+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
+    if(c==='FLGD')flgBySize[sz]=(flgBySize[sz]||0)+1;
   }));
-  if(vlvFlg){
-    items.push({qty:vlvFlg*2,desc:'WN FLANGE '+d.size+' (valve bolt-up)'});
-    items.push({qty:vlvFlg*2,desc:'GASKET '+d.size+' (valve bolt-up)'});
-    items.push({qty:vlvFlg*2,desc:'STUD BOLT SET '+d.size+' — count/dia per class: TOOLS > FLANGE'});
-  }
-  // reducers
-  Object.values(d.reds||{}).forEach(list=>list.forEach(rd=>
-    items.push({qty:1,desc:(rd.kind==='ECC'?'ECC':'CON')+' REDUCER '+d.size+' x '+rd.to+(isSW?' SW':' BW')})));
+  Object.entries(flgBySize).forEach(([sz,n])=>{
+    items.push({qty:n*2,desc:'WN FLANGE '+sz+' (valve bolt-up)'});
+    items.push({qty:n*2,desc:'GASKET '+sz+' (valve bolt-up)'});
+    items.push({qty:n*2,desc:'STUD BOLT SET '+sz+' — count/dia per class: TOOLS > FLANGE'});
+  });
+  // reducers — sized to their run
+  Object.entries(d.reds||{}).forEach(([rid,list])=>list.forEach(rd=>{
+    const sz=(m.runSize&&m.runSize[rid])||d.size;
+    items.push({qty:1,desc:(rd.kind==='ECC'?'ECC':'CON')+' REDUCER '+sz+' x '+rd.to+(isSW?' SW':' BW')});
+  }));
   const s=m.welds.filter(w=>w.sf==='S').length,f=m.welds.length-s;
   if(m.welds.length)items.push({qty:m.welds.length,desc:(isSW?'SW':'BW')+' WELDS — '+s+' SHOP / '+f+' FIELD'});
   return items;
@@ -219,8 +267,8 @@ function isoLabelPlan(d,m,pts,fs){
   const plan={runs:{},welds:{}};
   d.runs.forEach(r=>{
     const a=pts[r.a],b=pts[r.b];if(!a||!b)return;
-    const ri=m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
-    const t1=isoFmt(r.len),t2=ri?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):'';
+    const ri=m.perRun?m.perRun[r.id]?.ri:m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
+    const t1=isoFmt(r.len),t2=ri&&ri.labelRun===r.id?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):'';
     const w=Math.max(t1.length,t2.length*0.82)*fs*0.62,h=fs*2.4;
     const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,px=-dy/L,py=dx/L;
     const base=w/2*Math.abs(px)+h/2*Math.abs(py)+fs*0.55;
@@ -280,12 +328,12 @@ function buildPrintSVG(d,m,widthPx){
     // flow arrow
     if(L>fs*3){const t=0.62,fx=ax+dx*t,fy=ay+dy*t,u=fs*0.42;
       s+=`<polygon points="${fx+dx/L*u},${fy+dy/L*u} ${fx+px*u*0.6-dx/L*u*0.5},${fy+py*u*0.6-dy/L*u*0.5} ${fx-px*u*0.6-dx/L*u*0.5},${fy-py*u*0.6-dy/L*u*0.5}" fill="#000"/>`}
-    const ri=m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
+    const ri=m.perRun?m.perRun[r.id]?.ri:m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
     const lp=plan.runs[r.id];
     if(lp){
       if(lp.leader)s+=`<line x1="${lp.leader[0]}" y1="${lp.leader[1]}" x2="${lp.leader[2]}" y2="${lp.leader[3]}" stroke="#000" stroke-width="${lw*0.55}" opacity="0.5"/>`;
       s+=`<text x="${lp.x}" y="${lp.y-fs*0.25}" font-size="${fs}" font-family="Helvetica" text-anchor="middle" fill="#000">${isoFmt(r.len)}</text>`;
-      s+=`<text x="${lp.x}" y="${lp.y+fs*0.85}" font-size="${fs*0.78}" font-family="Helvetica" text-anchor="middle" fill="#000">${ri?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):''}</text>`;
+      s+=`<text x="${lp.x}" y="${lp.y+fs*0.85}" font-size="${fs*0.78}" font-family="Helvetica" text-anchor="middle" fill="#000">${ri&&ri.labelRun===r.id?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):''}</text>`;
     }
     (d.valves?.[r.id]||[]).forEach(()=>{const u=fs*0.8;
       s+=`<polygon points="${mx-u},${my-u*0.7} ${mx+u},${my+u*0.7} ${mx+u},${my-u*0.7} ${mx-u},${my+u*0.7}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`});

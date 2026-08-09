@@ -43,122 +43,20 @@
 <script src="pipepro-data.js"></script>
 <script src="pipepro-iso.js"></script>
 
-<!-- React -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<!-- React (production) — JSX is precompiled at deploy time by build.js; no in-browser Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"></script>
 
-<!-- Component layers -->
-<script type="text/babel" src="tweaks-panel.jsx"></script>
-<script type="text/babel" src="pipepro-valve.jsx"></script>
-<script type="text/babel" src="pipepro-tabs.jsx"></script>
-<script type="text/babel" src="pipepro-sheet.jsx"></script>
-<script type="text/babel" src="pipepro-draw.jsx"></script>
+<!-- Component layers (compiled from the .jsx sources — edit .jsx, run: node build.js) -->
+<script src="tweaks-panel.compiled.js"></script>
+<script src="pipepro-valve.compiled.js"></script>
+<script src="pipepro-tabs.compiled.js"></script>
+<script src="pipepro-sheet.compiled.js"></script>
+<script src="pipepro-draw.compiled.js"></script>
+<script src="pipepro-shell.compiled.js"></script>
 
-<!-- App shell -->
-<script type="text/babel">
-const {useState,useEffect}=React;
 
-// Inline theme objects — no dependency on pipepro-data.js globals for theme switch
-const _DK={bg:'#0A0B0D',s1:'#0f1318',s2:'#1a1f26',s3:'#252c35',bdr:'#2e3740',bdrS:'#1e252d',lime:'#A6CE39',lime6:'#8DB22A',org:'#E8631A',amb:'#C9842E',fg:'#E8EDF2',fg2:'#9AAAB8',fg3:'#5a6a78',ok:'#3EA66A',danger:'#D04030',navy:'#152240'};
-const _LT={bg:'#E6E9EC',s1:'#F5F6F8',s2:'#FFFFFF',s3:'#D8DCE1',bdr:'#B0BAC4',bdrS:'#C4CCD4',lime:'#4A8800',lime6:'#3A7000',org:'#B83800',amb:'#7A5000',fg:'#0D1318',fg2:'#344050',fg3:'#607080',ok:'#1E7848',danger:'#B02020',navy:'#1A2C48'};
-
-const TWEAK_DEFAULTS=/*EDITMODE-BEGIN*/{"theme":"dark","defMat":"CS A106 Gr.B","defSch":"Sch 40","defSize":"4\""}/*EDITMODE-END*/;
-
-function App(){
-  const[tab,setTab]=useState('draw');
-  const[tw,setTweak]=useTweaks(TWEAK_DEFAULTS);
-
-  // Apply theme globally so all child components pick it up on re-render
-  const thm = (tw&&tw.theme==='light') ? _LT : _DK;
-  window.T = thm;
-  window.tweakValues = tw;
-
-  const TABS=[{id:'draw',icon:'⌗',lbl:'DRAW'},{id:'cut',icon:'✂',lbl:'CUT'},{id:'tape',icon:'⊞',lbl:'TAPE'},{id:'tools',icon:'◯',lbl:'TOOLS'},{id:'more',icon:'≡',lbl:'MORE'}];
-  return(
-    <div className="shell" style={{display:'flex',flexDirection:'column',background:thm.bg,color:thm.fg,fontFamily:FB,overflow:'hidden'}}>
-
-      {/* Header */}
-      <div style={{
-        display:'flex',alignItems:'center',gap:12,
-        paddingTop:'max(env(safe-area-inset-top,0px),12px)',
-        paddingBottom:12,paddingLeft:16,paddingRight:16,
-        background:thm.s1,borderBottom:`1px solid ${thm.bdr}`,flexShrink:0,
-      }}>
-        <img src="assets/logo-chrome.jpg"
-          style={{width:38,height:38,objectFit:'contain',borderRadius:3,flexShrink:0}}
-          onError={e=>e.target.style.display='none'}
-        />
-        <div>
-          <div style={{fontFamily:FD,fontStyle:'italic',fontWeight:900,fontSize:26,lineHeight:1,textTransform:'uppercase',letterSpacing:'0.04em',color:thm.fg}}>
-            PIPEPRO
-          </div>
-          <div style={{fontSize:9,fontFamily:FB,fontWeight:700,color:thm.lime,letterSpacing:'0.22em',textTransform:'uppercase',marginTop:2}}>
-            FIELD CALCULATOR
-          </div>
-        </div>
-        <div style={{marginLeft:'auto',textAlign:'right'}}>
-          <div style={{fontSize:8,fontFamily:FB,color:thm.fg3,letterSpacing:'0.08em',textTransform:'uppercase',lineHeight:1.65}}>
-            Steampunk<br/>Fabrication
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{flex:1,minHeight:0,overflow:'hidden'}}>
-        {tab==='draw'  && <DrawTab/>}
-        {tab==='cut'   && <CutTab/>}
-        {tab==='tape'  && <TapeTab/>}
-        {tab==='tools' && <ToolsTab/>}
-        {tab==='more'  && <MoreTab/>}
-      </div>
-
-      {/* Tab bar */}
-      <div style={{
-        display:'flex',background:thm.s1,
-        borderTop:`1px solid ${thm.bdr}`,flexShrink:0,
-        paddingBottom:'env(safe-area-inset-bottom,0px)',
-      }}>
-        {TABS.map(({id,icon,lbl})=>(
-          <button key={id} onClick={()=>setTab(id)} style={{
-            flex:1,display:'flex',flexDirection:'column',alignItems:'center',
-            padding:'8px 2px 7px',
-            background:tab===id?al(thm.lime,0.07):'transparent',
-            color:tab===id?thm.lime:thm.fg3,
-            borderTop:`2px solid ${tab===id?thm.lime:'transparent'}`,
-            transition:'color .12s',
-          }}>
-            <span style={{fontSize:18,lineHeight:1,marginBottom:3}}>{icon}</span>
-            <span style={{fontSize:7,fontFamily:FB,fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase'}}>{lbl}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Tweaks Panel */}
-      <TweaksPanel title="PipePro Settings">
-        <TweakSection label="Appearance"/>
-        <TweakRadio label="Theme" value={tw&&tw.theme||'dark'}
-          options={['dark','light']}
-          onChange={v=>setTweak('theme',v)}/>
-        <TweakSection label="Pipe Defaults"/>
-        <TweakSelect label="Default Size" value={tw&&tw.defSize||'4"'}
-          options={SIZES}
-          onChange={v=>setTweak('defSize',v)}/>
-        <TweakSelect label="Default Material" value={tw&&tw.defMat||'CS A106 Gr.B'}
-          options={MATS}
-          onChange={v=>setTweak('defMat',v)}/>
-        <TweakSelect label="Default Schedule" value={tw&&tw.defSch||'Sch 40'}
-          options={SCHEDS}
-          onChange={v=>setTweak('defSch',v)}/>
-      </TweaksPanel>
-
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
 
 <!-- Service Worker registration -->
 <script>

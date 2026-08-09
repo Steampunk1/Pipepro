@@ -53,6 +53,14 @@ const SW90={'1/2"':0.875,'3/4"':1.000,'1"':1.188,'1-1/4"':1.438,'1-1/2"':1.563,'
 const SW45={'1/2"':0.500,'3/4"':0.563,'1"':0.688,'1-1/4"':0.813,'1-1/2"':0.875,'2"':1.000,'2-1/2"':1.188,'3"':1.375,'4"':1.688};
 const SWCO={'1/2"':0.438,'3/4"':0.500,'1"':0.563,'1-1/4"':0.688,'1-1/2"':0.750,'2"':0.875,'2-1/2"':1.000,'3"':1.125,'4"':1.375};
 const FRACS=['','1/16','1/8','3/16','1/4','5/16','3/8','7/16','1/2','9/16','5/8','11/16','3/4','13/16','7/8','15/16'];
+// ── B16.9 takeouts (center-to-face, inches, by NPS) — single source of truth
+//    for BOTH the CUT tab (getTO) and the DRAW iso engine (isoTakeout) ──
+const TO_90LR={0.5:1.5,0.75:1.125,1:1.5,1.25:1.875,1.5:2.25,2:3,2.5:3.75,3:4.5,4:6,6:9,8:12,10:15,12:18,14:21,16:24,18:27,20:30,24:36};
+const TO_90SR={1:1,1.25:1.25,1.5:1.5,2:2,2.5:2.5,3:3,4:4,6:6,8:8,10:10,12:12,14:14,16:16,18:18,20:20,24:24};
+const TO_45={0.5:0.625,0.75:0.75,1:0.875,1.25:1,1.5:1.125,2:1.375,2.5:1.75,3:2,4:2.5,6:3.75,8:5,10:6.25,12:7.5,14:8.75,16:10,18:11.25,20:12.5,24:15};
+const TO_TEE={0.5:1,0.75:1.125,1:1.5,1.25:1.875,1.5:2.25,2:2.5,2.5:3,3:3.375,4:4.125,6:5.625,8:7,10:8.5,12:10,14:11,16:12,18:13.5,20:15,24:17};
+// Olet display names — one place so BOM, weld map and editor never drift
+function oletName(o){if(!o)return'OLET';const t=o.t==='SOL'?'SOCKOLET':o.t==='TOL'?'THREADOLET':'WELDOLET';return o.bs?t+' '+o.bs:t;}
 const F8=[0,2,4,6,8,10,12,14];
 const SPOOL_PAL=['#A6CE39','#E8631A','#3A8FD4','#BF5AF2','#E84040','#28B865','#E8B830','#40C8D8','#FF9F0A','#A07850'];
 const ISO_SC=52;
@@ -112,7 +120,8 @@ function getTO(t,sz){
   if(!t||t==='Open End')return 0;const D=NPS[sz]||4;
   if(t.startsWith('SW ')||t==='Sockolet'){if(t.includes('90°')||t==='Sockolet')return SW90[sz]??0.88*D;if(t.includes('45°'))return SW45[sz]??0.5*D;return SWCO[sz]??0.44*D;}
   if(t.startsWith('THD ')||t==='Thredolet'){if(t.includes('90°')||t==='Thredolet')return(SW90[sz]??0.88*D)+0.0625;if(t.includes('45°'))return(SW45[sz]??0.5*D)+0.0625;return(SWCO[sz]??0.44*D)+0.0625;}
-  const bm={'90° Elbow LR':1.5*D,'90° Elbow SR':D,'45° Elbow':0.625*D,'Tee':D,'Reducing Tee':D,'Weld Cap':0.5*D,'Flange WN':0,'Flange SO':0,'Flange Blind':0,'Reducer Con':0.5*D,'Reducer Ecc':0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
+  // B16.9 table values for wrought fittings (formulas only as >24" fallback)
+  const bm={'90° Elbow LR':TO_90LR[D]??1.5*D,'90° Elbow SR':TO_90SR[D]??D,'45° Elbow':TO_45[D]??0.625*D,'Tee':TO_TEE[D]??D,'Reducing Tee':TO_TEE[D]??D,'Weld Cap':0.5*D,'Flange WN':0,'Flange SO':0,'Flange Blind':0,'Reducer Con':0.5*D,'Reducer Ecc':0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
   return bm[t]??0;
 }
 function getFitMat(m,conn){

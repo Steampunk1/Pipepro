@@ -1,16 +1,19 @@
 /* PipePro Service Worker — offline caching */
-const CACHE = 'pipepro-v13';
-const CDN_CACHE = 'pipepro-cdn-v13';
+const CACHE = 'pipepro-v14';
+const CDN_CACHE = 'pipepro-cdn-v14';
 
 const LOCAL = [
+  './',
+  './index.html',
   './PipePro.html',
   './pipepro-data.js',
   './pipepro-iso.js',
-  './pipepro-tabs.jsx',
-  './pipepro-sheet.jsx',
-  './pipepro-draw.jsx',
-  './pipepro-valve.jsx',
-  './tweaks-panel.jsx',
+  './tweaks-panel.compiled.js',
+  './pipepro-valve.compiled.js',
+  './pipepro-tabs.compiled.js',
+  './pipepro-sheet.compiled.js',
+  './pipepro-draw.compiled.js',
+  './pipepro-shell.compiled.js',
   './help.html',
   './manifest.json',
   './icon-192.png',
@@ -20,9 +23,8 @@ const LOCAL = [
 ];
 
 const CDN = [
-  'https://unpkg.com/react@18.3.1/umd/react.development.js',
-  'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js',
-  'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js',
+  'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
   'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
 ];
 

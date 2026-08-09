@@ -75,5 +75,12 @@
 
   <div class="foot">STEAMPUNK FABRICATION · HAZLEHURST, MS · (601) 757-3377 · 24/7</div>
 </div>
+<script>
+// Register the same service worker as the app so the landing page (and the
+// texted link) works offline once anything on this origin has been visited.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(function(){})});
+}
+</script>
 </body>
 </html>
