@@ -95,6 +95,11 @@ function computeModel(d){
   // takeout for a run at a node — sized to that run's line size
   function toAt(nodeId,runId){const f=nodeFit[nodeId];if(!f)return 0;
     const sz=runSize[runId]||d.size;
+    // flanged ends: working dims run to the GASKET FACE — the flange's own
+    // length (B16.5 Y) comes out of the pipe. SO flange: pipe inserts, ~1/2"
+    // face setback per shop convention.
+    if(f.type==='flangeWN'||f.type==='blindFlg')return flgTO(sz,(d.endClsOv||{})[nodeId]||'#150');
+    if(f.type==='flangeSO')return 0.5;
     if(f.type==='olet'){
       // header runs pass straight through (0); the BRANCH seats on the header —
       // deduct header OD/2 (to the header surface; olet stand-out is mfr-specific)
@@ -168,12 +173,31 @@ function computeModel(d){
   // at its field-measured distance: the piece becomes separate cut segments
   // between break faces. dist = run-start → part CENTER, as measured in field.
   function runBreaks(rid){
+    const sz=runSize[rid]||d.size;
     const out=[];
-    (d.valves?.[rid]||[]).forEach((v,i)=>out.push({kind:v.type,ff:v.ff||0,dist:v.dist,rid}));
-    ((redsMap)[rid]||[]).forEach((rd,i)=>out.push({kind:(rd.kind==='ECC'?'ECC':'CONC')+' RED',ff:rd.len||0,dist:rd.dist,rid}));
-    (((d.flgs||{})[rid])||[]).forEach((fl,i)=>out.push({kind:'BRKOUT FLGS',ff:fl.ff||0,dist:fl.dist,rid}));
+    // effective break width = what the part REALLY consumes between pipe ends:
+    // flanged parts include their two mating WN flanges + gasket allowances
+    (d.valves?.[rid]||[]).forEach(v=>{
+      const conn=v.conn||'FLGD';
+      const w=conn==='FLGD'?(v.ff||0)+2*(flgTO(sz,v.cls||'#150')+GSK_ALLOW):(v.ff||0);
+      out.push({kind:v.type,ff:w,dist:v.dist,rid,gap:conn==='FLGD'||conn==='BW'});
+    });
+    (redsMap[rid]||[]).forEach(rd=>{
+      const w=rd.len||RED_H[npsOf(sz)]||0; // B16.9 H when not overridden
+      out.push({kind:(rd.kind==='ECC'?'ECC':'CONC')+' RED',ff:w,dist:rd.dist,rid,gap:!isSW});
+    });
+    (((d.flgs||{})[rid])||[]).forEach(fl=>{
+      const w=2*flgTO(sz,fl.cls||'#150')+GSK_ALLOW+(fl.ff||0);
+      out.push({kind:'BRKOUT FLGS',ff:w,dist:fl.dist,rid,gap:true});
+    });
     return out;
   }
+  // root gap applies at BUTT-welded boundaries only (BW drawings)
+  const endGap=nodeId=>{
+    if(isSW)return false;
+    const f=nodeFit[nodeId];if(!f)return false;
+    return!['open','capTHD','flangeSO','cross'].includes(f.type);
+  };
   const runsInfo=[];const perRunMap={};let pi=1;let unplaced=0;
   for(const prs of groups.values()){
     const size=runSize[prs[0].run.id]||d.size;
@@ -211,28 +235,31 @@ function computeModel(d){
     breaks.sort((a,b)=>a.s-b.s);
     // segments between: [start takeout] … part faces … [end takeout]
     const segMarks=[];
-    let prevFace=startTO,prevLbl=null;
-    const emitSeg=(face,leftDed,rightDed,span)=>{
-      const cut=face-prevFace;
+    const gapStart=endGap(startNode),gapEnd=endGap(endNode);
+    let prevFace=startTO;
+    const emitSeg=(face,leftDed,rightDed,span,gL,gR)=>{
+      const gaps=((gL?1:0)+(gR?1:0))*ROOT_GAP;
+      const cut=face-prevFace-gaps;
       const mark='P'+pi;pi++;
       if(cut<0)warn.push(mark+': parts overlap or takeouts exceed span — check field distances');
-      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:span,toA:leftDed,toB:rightDed,vff:0,cut,size,labelRun:null});
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:span,toA:leftDed,toB:rightDed+gaps,vff:0,cut,size,labelRun:null});
       segMarks.push(mark);
     };
     if(breaks.length===0){
-      const cut=L-startTO-endTO;
+      const gaps=((gapStart?1:0)+(gapEnd?1:0))*ROOT_GAP;
+      const cut=L-startTO-endTO-gaps;
       const mark='P'+pi;pi++;
       if(cut<0)warn.push(mark+': cut length negative — run shorter than takeouts');
       const labelRun=chain.reduce((m2,c)=>c.run.len>m2.run.len?c:m2,chain[0]).run.id;
-      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:L,toA:startTO,toB:endTO,vff:0,cut,size,labelRun});
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:L,toA:startTO,toB:endTO+gaps,vff:0,cut,size,labelRun});
       segMarks.push(mark);
     }else{
-      let sPrev=0,dedPrev=startTO;
+      let sPrev=0,dedPrev=startTO,gPrev=gapStart;
       breaks.forEach(br=>{
-        emitSeg(br.s-br.ff/2,dedPrev,br.ff/2,br.s-sPrev);
-        prevFace=br.s+br.ff/2;sPrev=br.s;dedPrev=br.ff/2;
+        emitSeg(br.s-br.ff/2,dedPrev,br.ff/2,br.s-sPrev,gPrev,br.gap);
+        prevFace=br.s+br.ff/2;sPrev=br.s;dedPrev=br.ff/2;gPrev=br.gap;
       });
-      emitSeg(L-endTO,dedPrev,endTO,L-sPrev);
+      emitSeg(L-endTO,dedPrev,endTO,L-sPrev,gPrev,gapEnd);
     }
     const riList=runsInfo.slice(runsInfo.length-segMarks.length);
     // run-dim label shows the marks that live on that piece, on its longest member
@@ -320,7 +347,7 @@ function isoNewDrawing(st,defaults){
   const n=st.seq++;const pad=String(n).padStart(3,'0');
   return{id:'d'+Date.now(),name:'ISO-'+pad,lineNo:(defaults.size||'4"')+'-'+pad,size:defaults.size||'4"',mat:defaults.mat||'CS A106 Gr.B',sch:defaults.sch||'Sch 40',
     corner:'NE',asset:'',drawnBy:st.drawnBy||'',created:Date.now(),updated:Date.now(),conn:'BW',
-    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},activeEnd:1};
+    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},endClsOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},activeEnd:1};
 }
 // Run-dim second line: single segment shows its cut; a piece split by parts
 // lists its marks and points at the cut list (each segment has its own cut)

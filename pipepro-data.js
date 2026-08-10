@@ -62,6 +62,20 @@ const TO_TEE={0.5:1,0.75:1.125,1:1.5,1.25:1.875,1.5:2.25,2:2.5,2.5:3,3:3.375,4:4
 // Olet display names — one place so BOM, weld map and editor never drift
 function oletName(o){if(!o)return'OLET';const t=o.t==='SOL'?'SOCKOLET':o.t==='TOL'?'THREADOLET':'WELDOLET';return o.bs?t+' '+o.bs:t;}
 
+// ── ASME B16.5 WN flange takeout: GASKET FACE → weld bevel (Y, RF included) ──
+// Working dims run to the gasket face; the flange consumes Y of that dimension.
+// Verified against B16.20-2023-cross-checked dataset (asme-pipe-fab).
+const FLG_WN_TO={
+  '#150':{'1/2"':1.88,'3/4"':2.06,'1"':2.19,'1-1/4"':2.25,'1-1/2"':2.44,'2"':2.5,'2-1/2"':2.75,'3"':2.75,'4"':3.0,'6"':3.5,'8"':4.0,'10"':4.0,'12"':4.5,'14"':5.0,'16"':5.0,'18"':5.5,'20"':5.69,'24"':6.0},
+  '#300':{'1/2"':2.06,'3/4"':2.25,'1"':2.44,'1-1/4"':2.56,'1-1/2"':2.69,'2"':2.75,'2-1/2"':3.0,'3"':3.12,'4"':3.38,'6"':3.88,'8"':4.38,'10"':4.62,'12"':5.12,'14"':5.62,'16"':5.75,'18"':6.25,'20"':6.38,'24"':6.62},
+};
+function flgTO(sz,cls){const t=FLG_WN_TO[cls==='#300'?'#300':'#150'];return(t&&t[sz])||0;}
+const GSK_ALLOW=0.125;   // compressed gasket allowance per bolted joint
+const ROOT_GAP=0.125;    // root opening per butt-weld end (BW drawings)
+// B16.9 reducer overall length H (by larger end) and weld-cap length E
+const RED_H={0.75:1.5,1:2,1.25:2,1.5:2.5,2:3,2.5:3.5,3:3.5,4:4,6:5.5,8:6,10:7,12:8,14:13,16:14,18:15,20:20,24:20};
+const CAP_E={0.5:1,0.75:1,1:1.5,1.25:1.5,1.5:1.5,2:1.5,2.5:1.5,3:2,4:2.5,6:3.5,8:4,10:5,12:6,14:6.5,16:7,18:8,20:9,24:10.5};
+
 // ── ASME B16.10 valve face-to-face, flanged RF, inches ────────────────────────
 // Verified 2026-08-09: two independent compilations (manufacturer catalogs vs
 // engineering references) merged — 176 cells two-source agreed, 0 conflicts.
@@ -144,8 +158,9 @@ function getTO(t,sz){
   if(!t||t==='Open End')return 0;const D=NPS[sz]||4;
   if(t.startsWith('SW ')||t==='Sockolet'){if(t.includes('90°')||t==='Sockolet')return SW90[sz]??0.88*D;if(t.includes('45°'))return SW45[sz]??0.5*D;return SWCO[sz]??0.44*D;}
   if(t.startsWith('THD ')||t==='Thredolet'){if(t.includes('90°')||t==='Thredolet')return(SW90[sz]??0.88*D)+0.0625;if(t.includes('45°'))return(SW45[sz]??0.5*D)+0.0625;return(SWCO[sz]??0.44*D)+0.0625;}
-  // B16.9 table values for wrought fittings (formulas only as >24" fallback)
-  const bm={'90° Elbow LR':TO_90LR[D]??1.5*D,'90° Elbow SR':TO_90SR[D]??D,'45° Elbow':TO_45[D]??0.625*D,'Tee':TO_TEE[D]??D,'Reducing Tee':TO_TEE[D]??D,'Weld Cap':0.5*D,'Flange WN':0,'Flange SO':0,'Flange Blind':0,'Reducer Con':0.5*D,'Reducer Ecc':0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'Plug Valve':2.5*D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Union':0,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
+  // B16.9/B16.5 table values (formulas only as fallback). Flange takeouts are
+  // #150 here — the DRAW tab carries class per end; CUT tab assumes #150.
+  const bm={'90° Elbow LR':TO_90LR[D]??1.5*D,'90° Elbow SR':TO_90SR[D]??D,'45° Elbow':TO_45[D]??0.625*D,'Tee':TO_TEE[D]??D,'Reducing Tee':TO_TEE[D]??D,'Weld Cap':CAP_E[D]??0.5*D,'Flange WN':flgTO(sz,'#150'),'Flange SO':0.5,'Flange Blind':flgTO(sz,'#150'),'Reducer Con':RED_H[D]??0.5*D,'Reducer Ecc':RED_H[D]??0.5*D,'Gate Valve':3*D,'Ball Valve':2*D,'Globe Valve':3.5*D,'Check Valve':2.5*D,'Butterfly Valve':D,'Plug Valve':2.5*D,'PRV/Relief':2.5*D,'Strainer':2*D,'Weldolet':D,'Expansion Joint':3*D,'Union':0,'Spectacle Blind (Open)':0,'Spectacle Blind (Closed)':0,'Figure 8 Blind':0,'Swage Nipple':0.5*D};
   return bm[t]??0;
 }
 function getFitMat(m,conn){
