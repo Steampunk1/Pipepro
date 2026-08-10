@@ -163,21 +163,84 @@ function computeModel(d){
     if(f&&f.type==='olet'&&f.headerRuns){const[a,b]=f.headerRuns;if(a!=null&&b!=null&&a!==b)parent[find(a)]=find(b)}});
   const groups=new Map();
   perRun.forEach(pr=>{const g=find(pr.run.id);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(pr)});
-  const runsInfo=[];const perRunMap={};let pi=1;
-  for(const prs of groups.values()){
-    const cc=prs.reduce((s,p)=>s+p.run.len,0);
-    const ded=prs.reduce((s,p)=>s+p.ded,0);
-    // toAt already returns 0 at internal olet junctions, so a plain sum is the piece takeout
-    const to=prs.reduce((s,p)=>s+p.toA+p.toB,0);
-    const cut=cc-to-ded;
-    if(cut<0)warn.push('P'+pi+': cut length negative — run shorter than takeouts');
-    // label the piece on its longest segment only, so split headers don't print the mark twice
-    const labelRun=prs.reduce((m2,p)=>p.run.len>m2.run.len?p:m2,prs[0]).run.id;
-    const ri={run:prs[0].run,runIds:prs.map(p=>p.run.id),mark:'P'+pi,cc,toA:to,toB:0,vff:ded,cut,size:runSize[prs[0].run.id]||d.size,labelRun};
-    runsInfo.push(ri);
-    prs.forEach(p=>{perRunMap[p.run.id]={toA:p.toA,toB:p.toB,ded:p.ded,ri}});
-    pi++;
+  // ── Segment cut engine ──────────────────────────────────────────────────
+  // Every inline part (valve / reducer / breakout flange pair) BREAKS the pipe
+  // at its field-measured distance: the piece becomes separate cut segments
+  // between break faces. dist = run-start → part CENTER, as measured in field.
+  function runBreaks(rid){
+    const out=[];
+    (d.valves?.[rid]||[]).forEach((v,i)=>out.push({kind:v.type,ff:v.ff||0,dist:v.dist,rid}));
+    ((redsMap)[rid]||[]).forEach((rd,i)=>out.push({kind:(rd.kind==='ECC'?'ECC':'CONC')+' RED',ff:rd.len||0,dist:rd.dist,rid}));
+    (((d.flgs||{})[rid])||[]).forEach((fl,i)=>out.push({kind:'BRKOUT FLGS',ff:fl.ff||0,dist:fl.dist,rid}));
+    return out;
   }
+  const runsInfo=[];const perRunMap={};let pi=1;let unplaced=0;
+  for(const prs of groups.values()){
+    const size=runSize[prs[0].run.id]||d.size;
+    // order member runs into a chain (they join end-to-end through olet nodes)
+    let chain;
+    if(prs.length===1)chain=[{run:prs[0].run,rev:false}];
+    else{
+      const useCount={};prs.forEach(p=>{[p.run.a,p.run.b].forEach(n=>useCount[n]=(useCount[n]||0)+1)});
+      let node=prs.map(p=>p.run.a).concat(prs.map(p=>p.run.b)).find(n=>useCount[n]===1);
+      const unused=new Set(prs.map(p=>p.run.id));chain=[];
+      while(unused.size){
+        const p=prs.find(q=>unused.has(q.run.id)&&(q.run.a===node||q.run.b===node));
+        if(!p)break;
+        const rev=p.run.b===node;
+        chain.push({run:p.run,rev});unused.delete(p.run.id);
+        node=rev?p.run.a:p.run.b;
+      }
+      if(chain.length!==prs.length){chain=prs.map(p=>({run:p.run,rev:false}))} // fallback: unordered
+    }
+    const L=chain.reduce((s,c)=>s+c.run.len,0);
+    const firstC=chain[0],lastC=chain[chain.length-1];
+    const startNode=firstC.rev?firstC.run.b:firstC.run.a;
+    const endNode=lastC.rev?lastC.run.a:lastC.run.b;
+    const startTO=toAt(startNode,firstC.run.id),endTO=toAt(endNode,lastC.run.id);
+    // map every break to a global position along the chain
+    const breaks=[];let off=0;
+    chain.forEach(c=>{
+      runBreaks(c.run.id).forEach(br=>{
+        let dd=br.dist;
+        if(dd==null||!(dd>0)||dd>c.run.len){dd=c.run.len/2;br.noDist=true;unplaced++}
+        breaks.push({...br,s:off+(c.rev?c.run.len-dd:dd)});
+      });
+      off+=c.run.len;
+    });
+    breaks.sort((a,b)=>a.s-b.s);
+    // segments between: [start takeout] … part faces … [end takeout]
+    const segMarks=[];
+    let prevFace=startTO,prevLbl=null;
+    const emitSeg=(face,leftDed,rightDed,span)=>{
+      const cut=face-prevFace;
+      const mark='P'+pi;pi++;
+      if(cut<0)warn.push(mark+': parts overlap or takeouts exceed span — check field distances');
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:span,toA:leftDed,toB:rightDed,vff:0,cut,size,labelRun:null});
+      segMarks.push(mark);
+    };
+    if(breaks.length===0){
+      const cut=L-startTO-endTO;
+      const mark='P'+pi;pi++;
+      if(cut<0)warn.push(mark+': cut length negative — run shorter than takeouts');
+      const labelRun=chain.reduce((m2,c)=>c.run.len>m2.run.len?c:m2,chain[0]).run.id;
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:L,toA:startTO,toB:endTO,vff:0,cut,size,labelRun});
+      segMarks.push(mark);
+    }else{
+      let sPrev=0,dedPrev=startTO;
+      breaks.forEach(br=>{
+        emitSeg(br.s-br.ff/2,dedPrev,br.ff/2,br.s-sPrev);
+        prevFace=br.s+br.ff/2;sPrev=br.s;dedPrev=br.ff/2;
+      });
+      emitSeg(L-endTO,dedPrev,endTO,L-sPrev);
+    }
+    const riList=runsInfo.slice(runsInfo.length-segMarks.length);
+    // run-dim label shows the marks that live on that piece, on its longest member
+    const labelRun=chain.reduce((m2,c)=>c.run.len>m2.run.len?c:m2,chain[0]).run.id;
+    riList.forEach(ri=>{ri.labelRun=labelRun;ri.marks=segMarks});
+    prs.forEach(p=>{perRunMap[p.run.id]={toA:p.toA,toB:p.toB,ded:p.ded,ri:riList[0],marks:segMarks,breaks:breaks.filter(b=>b.rid===p.run.id)}});
+  }
+  if(unplaced>0)warn.push(unplaced+' part(s) have no field distance — placed mid-run. Tap the part row to set the measured distance.');
   // reducers change line size, but downstream runs stay at the drawn size — surface the trap
   d.runs.forEach(r=>{
     if((redsMap[r.id]||[]).length){
@@ -259,6 +322,14 @@ function isoNewDrawing(st,defaults){
     corner:'NE',asset:'',drawnBy:st.drawnBy||'',created:Date.now(),updated:Date.now(),conn:'BW',
     nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},activeEnd:1};
 }
+// Run-dim second line: single segment shows its cut; a piece split by parts
+// lists its marks and points at the cut list (each segment has its own cut)
+function markLbl(ri){
+  const ms=ri.marks&&ri.marks.length?ri.marks:[ri.mark];
+  if(ms.length===1)return ms[0]+' CUT '+isoFmt(Math.max(0,ri.cut));
+  const lbl=ms.length>3?ms[0]+'-'+ms[ms.length-1]:ms.join('/');
+  return lbl+' — SEE CUT LIST';
+}
 // ── Label layout: collision-avoiding placement (run dims + weld tags) ──
 function _segRectHit(a,b,R){
   if((a[0]<R.x0&&b[0]<R.x0)||(a[0]>R.x1&&b[0]>R.x1)||(a[1]<R.y0&&b[1]<R.y0)||(a[1]>R.y1&&b[1]>R.y1))return false;
@@ -290,7 +361,7 @@ function isoLabelPlan(d,m,pts,fs){
   d.runs.forEach(r=>{
     const a=pts[r.a],b=pts[r.b];if(!a||!b)return;
     const ri=m.perRun?m.perRun[r.id]?.ri:m.runsInfo.find(q=>q.runIds?q.runIds.includes(r.id):q.run.id===r.id);
-    const t1=isoFmt(r.len),t2=ri&&ri.labelRun===r.id?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):'';
+    const t1=isoFmt(r.len),t2=ri&&ri.labelRun===r.id?markLbl(ri):'';
     const w=Math.max(t1.length,t2.length*0.82)*fs*0.62,h=fs*2.4;
     const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,px=-dy/L,py=dx/L;
     const base=w/2*Math.abs(px)+h/2*Math.abs(py)+fs*0.55;
@@ -355,10 +426,31 @@ function buildPrintSVG(d,m,widthPx){
     if(lp){
       if(lp.leader)s+=`<line x1="${lp.leader[0]}" y1="${lp.leader[1]}" x2="${lp.leader[2]}" y2="${lp.leader[3]}" stroke="#000" stroke-width="${lw*0.55}" opacity="0.5"/>`;
       s+=`<text x="${lp.x}" y="${lp.y-fs*0.25}" font-size="${fs}" font-family="Helvetica" text-anchor="middle" fill="#000">${isoFmt(r.len)}</text>`;
-      s+=`<text x="${lp.x}" y="${lp.y+fs*0.85}" font-size="${fs*0.78}" font-family="Helvetica" text-anchor="middle" fill="#000">${ri&&ri.labelRun===r.id?ri.mark+' CUT '+isoFmt(Math.max(0,ri.cut)):''}</text>`;
+      s+=`<text x="${lp.x}" y="${lp.y+fs*0.85}" font-size="${fs*0.78}" font-family="Helvetica" text-anchor="middle" fill="#000">${ri&&ri.labelRun===r.id?markLbl(ri):''}</text>`;
     }
-    (d.valves?.[r.id]||[]).forEach(()=>{const u=fs*0.8;
-      s+=`<polygon points="${mx-u},${my-u*0.7} ${mx+u},${my+u*0.7} ${mx+u},${my-u*0.7} ${mx-u},${my+u*0.7}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`});
+    // inline parts drawn AT their field-measured distance, with the measurement
+    const partAt=(dist,draw)=>{
+      const t=Math.max(0.02,Math.min(0.98,(dist!=null&&dist>0?dist:r.len/2)/r.len));
+      const px2=ax+dx*t,py2=ay+dy*t;draw(px2,py2);
+      return[px2,py2];
+    };
+    (d.valves?.[r.id]||[]).forEach(v=>{const u=fs*0.8;
+      const[vx,vy]=partAt(v.dist,(x,y)=>{
+        s+=`<polygon points="${x-u},${y-u*0.7} ${x+u},${y+u*0.7} ${x+u},${y-u*0.7} ${x-u},${y+u*0.7}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`});
+      if(v.dist!=null&&v.dist>0)s+=`<text x="${vx+px*fs*1.15}" y="${vy+py*fs*1.15+fs*0.3}" font-size="${fs*0.66}" font-family="Helvetica" text-anchor="middle" fill="#000">@ ${isoFmt(v.dist)}</text>`;
+    });
+    ((d.reds||{})[r.id]||[]).forEach(rd=>{const u=fs*0.75;
+      const[vx,vy]=partAt(rd.dist,(x,y)=>{
+        s+=`<polygon points="${x-dx/L*u},${y-dy/L*u} ${x+dx/L*u+px*u*0.75},${y+dy/L*u+py*u*0.75} ${x+dx/L*u-px*u*0.75},${y+dy/L*u-py*u*0.75}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`});
+      if(rd.dist!=null&&rd.dist>0)s+=`<text x="${vx+px*fs*1.15}" y="${vy+py*fs*1.15+fs*0.3}" font-size="${fs*0.66}" font-family="Helvetica" text-anchor="middle" fill="#000">@ ${isoFmt(rd.dist)}</text>`;
+    });
+    (((d.flgs||{})[r.id])||[]).forEach(fl=>{const u=fs*0.55;
+      const[vx,vy]=partAt(fl.dist,(x,y)=>{
+        const gx=dx/L*fs*0.22,gy=dy/L*fs*0.22;
+        s+=`<line x1="${x-gx-px*u}" y1="${y-gy-py*u}" x2="${x-gx+px*u}" y2="${y-gy+py*u}" stroke="#000" stroke-width="${lw*1.6}"/>`;
+        s+=`<line x1="${x+gx-px*u}" y1="${y+gy-py*u}" x2="${x+gx+px*u}" y2="${y+gy+py*u}" stroke="#000" stroke-width="${lw*1.6}"/>`});
+      if(fl.dist!=null&&fl.dist>0)s+=`<text x="${vx+px*fs*1.15}" y="${vy+py*fs*1.15+fs*0.3}" font-size="${fs*0.66}" font-family="Helvetica" text-anchor="middle" fill="#000">@ ${isoFmt(fl.dist)}</text>`;
+    });
   });
   d.nodes.forEach(n=>{const f=m.nodeFit[n.id];if(!f)return;const[x,y]=P(m.pos[n.id]);
     if(f.type==='open'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.5}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`}
