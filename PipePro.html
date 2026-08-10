@@ -24,7 +24,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-    html,body,#root{height:100%;background:#0A0B0D;overflow:hidden;color:#E8EDF2}
+    html,body,#root{height:100%;background:#0A0B0D;overflow:hidden;color:#E8EDF2;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+    input,textarea{-webkit-user-select:text;user-select:text}
     /* iOS: 100vh overflows behind Safari bars — dvh tracks the real visible viewport */
     .shell{height:100vh;height:100dvh}
     .sheet86{max-height:86vh;max-height:86dvh}
