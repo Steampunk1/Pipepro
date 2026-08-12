@@ -99,7 +99,8 @@ function computeModel(d){
     // length (B16.5 Y) comes out of the pipe. SO flange: pipe inserts, ~1/2"
     // face setback per shop convention.
     if(f.type==='flangeWN'||f.type==='blindFlg')return flgTO(sz,(d.endClsOv||{})[nodeId]||'#150');
-    if(f.type==='flangeSO')return 0.5;
+    if(f.type==='flangeSO')return SO_SETBACK;
+    if(f.type==='flangeLJ')return flgSideTO(sz,(d.endClsOv||{})[nodeId]||'#150','LJ');
     if(f.type==='olet'){
       // header runs pass straight through (0); the BRANCH seats on the header —
       // deduct header OD/2 (to the header surface; olet stand-out is mfr-specific)
@@ -118,10 +119,10 @@ function computeModel(d){
   // threadolets, whose branch connection is threaded — one attachment weld only
   // SO flange = ONE weld-map joint (it takes two fillet passes — hub + face —
   // but it counts and gets tracked as a single joint, not two)
-  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,flangeSO:1,blindFlg:1,capTHD:0,open:0,cross:0,bendX:2};
+  const wcount={joint:1,ell45:2,ell90:2,ell90sr:2,tee:3,cap:1,flangeWN:1,flangeSO:1,flangeLJ:1,blindFlg:1,capTHD:0,open:0,cross:0,bendX:2};
   const fitName=isSW
-    ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',flangeSO:'SW FLANGE',blindFlg:'SW FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'}
-    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',flangeSO:'SO FLG (DBL FILLET)',blindFlg:'WN FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'};
+    ?{joint:'SW COUPLING',ell45:'SW 45° ELL',ell90:'SW 90° ELL',ell90sr:'SW 90° ELL',tee:'SW TEE',cap:'SW CAP',flangeWN:'SW FLANGE',flangeSO:'SW FLANGE',flangeLJ:'LJ STUB BW',blindFlg:'SW FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'}
+    :{joint:'BUTT JOINT',ell45:'45° ELL',ell90:'90° LR ELL',ell90sr:'90° SR ELL',tee:'TEE',cap:'CAP',flangeWN:'WN FLANGE',flangeSO:'SO FLG (DBL FILLET)',flangeLJ:'LJ STUB BW',blindFlg:'WN FLG (BLIND END)',capTHD:'THD CAP',bendX:'NON-STD BEND'};
   function emitNode(id){if(emitted[id])return;emitted[id]=1;const f=nodeFit[id];
     if(f.type==='olet'){
       const nm=oletName(f.ol);
@@ -138,7 +139,7 @@ function computeModel(d){
     (d.valves?.[r.id]||[]).forEach((v,i)=>{
       const conn=v.conn||'FLGD';
       if(conn==='THD')return; // threaded parts screw on — no welds
-      const lbl=vlvLbl[conn]||'FLG';
+      const lbl=conn==='FLGD'?(v.ftype==='SO'?'SO FLG FILLET':v.ftype==='LJ'?'STUB BW':'FLG'):(vlvLbl[conn]||'FLG');
       const key='v'+r.id+'-'+i+'a',key2='v'+r.id+'-'+i+'b';
       welds.push({key,no:welds.length+1,at:r.id,desc:v.type+' '+lbl+' 1',sf:d.sfOv?.[key]||'S'});
       welds.push({key:key2,no:welds.length+1,at:r.id,desc:v.type+' '+lbl+' 2',sf:d.sfOv?.[key2]||'S'});
@@ -150,9 +151,11 @@ function computeModel(d){
       welds.push({key:key2,no:welds.length+1,at:r.id,desc:nm+' 2',sf:d.sfOv?.[key2]||'S'});
     });
     ((d.flgs||{})[r.id]||[]).forEach((fl,i)=>{
+      const ft=fl.ftype||'WN';
+      const nm=ft==='SO'?'BRKOUT SO FLG FILLET':ft==='LJ'?'BRKOUT STUB BW':'BRKOUT WN FLG';
       const key='f'+r.id+'-'+i+'a',key2='f'+r.id+'-'+i+'b';
-      welds.push({key,no:welds.length+1,at:r.id,desc:'BRKOUT FLG 1',sf:d.sfOv?.[key]||'S'});
-      welds.push({key:key2,no:welds.length+1,at:r.id,desc:'BRKOUT FLG 2',sf:d.sfOv?.[key2]||'S'});
+      welds.push({key,no:welds.length+1,at:r.id,desc:nm+' 1',sf:d.sfOv?.[key]||'S'});
+      welds.push({key:key2,no:welds.length+1,at:r.id,desc:nm+' 2',sf:d.sfOv?.[key2]||'S'});
     });
   emitNode(r.b)});
   // cut list — header runs continue THROUGH olets, so runs joined by an olet
@@ -178,17 +181,19 @@ function computeModel(d){
     // effective break width = what the part REALLY consumes between pipe ends:
     // flanged parts include their two mating WN flanges + gasket allowances
     (d.valves?.[rid]||[]).forEach(v=>{
-      const conn=v.conn||'FLGD';
-      const w=conn==='FLGD'?(v.ff||0)+2*(flgTO(sz,v.cls||'#150')+GSK_ALLOW):(v.ff||0);
-      out.push({kind:v.type,ff:w,dist:v.dist,rid,gap:conn==='FLGD'||conn==='BW'});
+      const conn=v.conn||'FLGD';const ft=v.ftype||'WN';
+      const w=conn==='FLGD'?(v.ff||0)+2*(flgSideTO(sz,v.cls||'#150',ft)+GSK_ALLOW):(v.ff||0);
+      // SO mating flanges are fillet-welded — no root gap; WN/LJ butt-weld
+      out.push({kind:v.type,ff:w,dist:v.dist,rid,gap:conn==='BW'||(conn==='FLGD'&&ft!=='SO')});
     });
     (redsMap[rid]||[]).forEach(rd=>{
       const w=rd.len||RED_H[npsOf(sz)]||0; // B16.9 H when not overridden
       out.push({kind:(rd.kind==='ECC'?'ECC':'CONC')+' RED',ff:w,dist:rd.dist,rid,gap:!isSW});
     });
     (((d.flgs||{})[rid])||[]).forEach(fl=>{
-      const w=2*flgTO(sz,fl.cls||'#150')+GSK_ALLOW+(fl.ff||0);
-      out.push({kind:'BRKOUT FLGS',ff:w,dist:fl.dist,rid,gap:true});
+      const ft=fl.ftype||'WN';
+      const w=2*flgSideTO(sz,fl.cls||'#150',ft)+GSK_ALLOW+(fl.ff||0);
+      out.push({kind:'BRKOUT FLGS',ff:w,dist:fl.dist,rid,gap:ft!=='SO'});
     });
     return out;
   }
@@ -290,8 +295,8 @@ function isoBOM(d,m){
   });
   // fittings counted at the size of the pipe passing through them
   const fitDesc=(type,sz)=>isSW
-    ?({ell90:'SW 90° ELL '+sz,ell90sr:'SW 90° ELL '+sz,ell45:'SW 45° ELL '+sz,tee:'SW TEE '+sz,cap:'SW CAP '+sz,flangeWN:'SW FLANGE '+sz,flangeSO:'SW FLANGE '+sz,blindFlg:'BLIND END SET '+sz+' (SW flg + blind + gskt + studs)',capTHD:'THD CAP '+sz,joint:'SW FULL COUPLING '+sz})[type]
-    :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz,flangeSO:'SO FLANGE '+sz,blindFlg:'BLIND END SET '+sz+' (WN flg + blind + gskt + studs)',capTHD:'THD CAP '+sz})[type];
+    ?({ell90:'SW 90° ELL '+sz,ell90sr:'SW 90° ELL '+sz,ell45:'SW 45° ELL '+sz,tee:'SW TEE '+sz,cap:'SW CAP '+sz,flangeWN:'SW FLANGE '+sz,flangeSO:'SW FLANGE '+sz,flangeLJ:'LJ FLANGE + STUB END '+sz,blindFlg:'BLIND END SET '+sz+' (SW flg + blind + gskt + studs)',capTHD:'THD CAP '+sz,joint:'SW FULL COUPLING '+sz})[type]
+    :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz,flangeSO:'SO FLANGE '+sz,flangeLJ:'LJ FLANGE + STUB END '+sz,blindFlg:'BLIND END SET '+sz+' (WN flg + blind + gskt + studs)',capTHD:'THD CAP '+sz})[type];
   const counts={};
   Object.values(m.nodeFit).forEach(f=>{
     const desc=fitDesc(f.type,f.sz||d.size);
@@ -307,34 +312,37 @@ function isoBOM(d,m){
     }});
   Object.entries(olCounts).forEach(([k,q])=>items.push({qty:q,desc:k}));
   // valves — sized to their run; bolt-up hardware only for flanged (2 joints per valve)
-  const flgBySize={};
+  // bolted-joint hardware, grouped by size + flange TYPE (WN / SO / LJ).
+  // LJ rides on stub ends — the loose flange plus a stub per side.
+  const hw={};
+  const addHw=(sz,ft,joints,flanges,tag)=>{
+    const k=sz+'|'+(ft||'WN')+'|'+tag;
+    hw[k]=hw[k]||{sz,ft:ft||'WN',tag,joints:0,flanges:0};
+    hw[k].joints+=joints;hw[k].flanges+=flanges;
+  };
+  const flgName=ft=>ft==='SO'?'SO FLANGE':ft==='LJ'?'LJ FLANGE':(isSW?'SW FLANGE':'WN FLANGE');
   const SPECIALTY=['Expansion Joint','Union','Swage Nipple'];
   Object.entries(d.valves||{}).forEach(([rid,list])=>list.forEach(v=>{
     const c=v.conn||'FLGD';const sz=(m.runSize&&m.runSize[rid])||d.size;
     const noun=SPECIALTY.includes(v.type)?'':' VALVE';
-    items.push({qty:1,desc:v.type.toUpperCase()+noun+' '+sz+' '+c+(v.cls&&c==='FLGD'?' '+v.cls:'')+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
-    if(c==='FLGD')flgBySize[sz]=(flgBySize[sz]||0)+1;
+    items.push({qty:1,desc:v.type.toUpperCase()+noun+' '+sz+' '+c+(v.cls&&c==='FLGD'?' '+v.cls:'')+(c==='FLGD'&&v.ftype&&v.ftype!=='WN'?' ('+v.ftype+' mating flgs)':'')+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
+    if(c==='FLGD')addHw(sz,v.ftype,2,2,'valve bolt-up');
   }));
-  Object.entries(flgBySize).forEach(([sz,n])=>{
-    items.push({qty:n*2,desc:'WN FLANGE '+sz+' (valve bolt-up)'});
-    items.push({qty:n*2,desc:'GASKET '+sz+' (valve bolt-up)'});
-    items.push({qty:n*2,desc:'STUD BOLT SET '+sz+' — count/dia per class: TOOLS > FLANGE'});
-  });
   // reducers — sized to their run
   Object.entries(d.reds||{}).forEach(([rid,list])=>list.forEach(rd=>{
     const sz=(m.runSize&&m.runSize[rid])||d.size;
     items.push({qty:1,desc:(rd.kind==='ECC'?'ECC':'CON')+' REDUCER '+sz+' x '+rd.to+(isSW?' SW':' BW')});
   }));
-  // breakout flange pairs — full bolted joint hardware per set
-  const brkBySize={};
-  Object.entries(d.flgs||{}).forEach(([rid,list])=>{
+  // breakout flange pairs
+  Object.entries(d.flgs||{}).forEach(([rid,list])=>list.forEach(fl=>{
     const sz=(m.runSize&&m.runSize[rid])||d.size;
-    brkBySize[sz]=(brkBySize[sz]||0)+list.length;
-  });
-  Object.entries(brkBySize).forEach(([sz,n])=>{
-    items.push({qty:n*2,desc:(isSW?'SW':'WN')+' FLANGE '+sz+' (breakout pair)'});
-    items.push({qty:n,desc:'GASKET '+sz+' (breakout)'});
-    items.push({qty:n,desc:'STUD BOLT SET '+sz+' — count/dia per class: TOOLS > FLANGE'});
+    addHw(sz,fl.ftype,1,2,'breakout');
+  }));
+  Object.values(hw).forEach(h=>{
+    items.push({qty:h.flanges,desc:flgName(h.ft)+' '+h.sz+' ('+h.tag+')'});
+    if(h.ft==='LJ')items.push({qty:h.flanges,desc:'STUB END '+h.sz+' B16.9 ('+h.tag+')'});
+    items.push({qty:h.joints,desc:'GASKET '+h.sz+' ('+h.tag+')'});
+    items.push({qty:h.joints,desc:'STUD BOLT SET '+h.sz+' — count/dia per class: TOOLS > FLANGE'});
   });
   const s=m.welds.filter(w=>w.sf==='S').length,f=m.welds.length-s;
   if(m.welds.length)items.push({qty:m.welds.length,desc:(isSW?'SW':'BW')+' WELDS — '+s+' SHOP / '+f+' FIELD'});
@@ -482,7 +490,7 @@ function buildPrintSVG(d,m,widthPx){
   d.nodes.forEach(n=>{const f=m.nodeFit[n.id];if(!f)return;const[x,y]=P(m.pos[n.id]);
     if(f.type==='open'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.5}" fill="#fff" stroke="#000" stroke-width="${lw}"/>`}
     else if(f.type==='cap'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.4}" fill="#000"/>`}
-    else if(f.type==='flangeWN'||f.type==='flangeSO'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/>`}
+    else if(f.type==='flangeWN'||f.type==='flangeSO'||f.type==='flangeLJ'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/>`}
     else if(f.type==='blindFlg'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/><circle cx="${x}" cy="${y}" r="${fs*0.2}" fill="#000"/>`}
     else if(f.type==='capTHD'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.35}" fill="#000"/>`}
     else if(f.type==='olet'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.38}" fill="#fff" stroke="#000" stroke-width="${lw*1.4}"/><circle cx="${x}" cy="${y}" r="${fs*0.14}" fill="#000"/>`}

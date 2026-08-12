@@ -70,6 +70,24 @@ const FLG_WN_TO={
   '#300':{'1/2"':2.06,'3/4"':2.25,'1"':2.44,'1-1/4"':2.56,'1-1/2"':2.69,'2"':2.75,'2-1/2"':3.0,'3"':3.12,'4"':3.38,'6"':3.88,'8"':4.38,'10"':4.62,'12"':5.12,'14"':5.62,'16"':5.75,'18"':6.25,'20"':6.38,'24"':6.62},
 };
 function flgTO(sz,cls){const t=FLG_WN_TO[cls==='#300'?'#300':'#150'];return(t&&t[sz])||0;}
+const SO_SETBACK=0.5;    // slip-on: pipe end set back from flange face (shop convention)
+// ASME B16.9 lap-joint STUB END lengths F (end → lap face), inches.
+// Verified 2026-08-09: Weldbend + Wellgrow + 5 reference tables, all 36 cells
+// agree, zero disputes. App uses the LONG pattern (std for BW carbon piping);
+// short pattern (= MSS SP-43) included for reference / future toggle.
+const STUB_F={
+  long:{'1/2"':3,'3/4"':3,'1"':4,'1-1/4"':4,'1-1/2"':4,'2"':6,'2-1/2"':6,'3"':6,'4"':6,'6"':8,'8"':8,'10"':10,'12"':10,'14"':12,'16"':12,'18"':12,'20"':12,'24"':12},
+  short:{'1/2"':2,'3/4"':2,'1"':2,'1-1/4"':2,'1-1/2"':2,'2"':2.5,'2-1/2"':2.5,'3"':2.5,'4"':3,'6"':3.5,'8"':4,'10"':5,'12"':6,'14"':6,'16"':6,'18"':6,'20"':6,'24"':6}
+};
+// How much pipe each flange style consumes, measured from the GASKET FACE:
+//  WN — flange length Y (pipe butt-welds at the bevel; root gap applies)
+//  SO — pipe slips through the hub to ~1/2" from the face (fillets, no gap)
+//  LJ — the STUB END consumes F; the loose flange rides it (butt weld at stub)
+function flgSideTO(sz,cls,ftype){
+  if(ftype==='SO')return SO_SETBACK;
+  if(ftype==='LJ')return(typeof STUB_F!=='undefined'&&STUB_F.long&&STUB_F.long[sz])||flgTO(sz,cls);
+  return flgTO(sz,cls);
+}
 const GSK_ALLOW=0.125;   // compressed gasket allowance per bolted joint
 const ROOT_GAP=0.125;    // root opening per butt-weld end (BW drawings)
 // B16.9 reducer overall length H (by larger end) and weld-cap length E
