@@ -1,6 +1,6 @@
 /* PipePro Service Worker — offline caching */
-const CACHE = 'pipepro-v23';
-const CDN_CACHE = 'pipepro-cdn-v23';
+const CACHE = 'pipepro-v24';
+const CDN_CACHE = 'pipepro-cdn-v24';
 
 const LOCAL = [
   './',

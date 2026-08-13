@@ -73,10 +73,20 @@ if('serviceWorker' in navigator){
         console.log('[PipePro] SW registration failed:',err);
       });
   });
-  // Self-heal after an update: reload once when the new SW takes control
-  var swReloaded=false;
+  // Self-heal after an update — but never yank the app out from under the user:
+  // reload only while the app is hidden, and flag the reload so DrawTab reopens
+  // the drawing that was up. (Drawing data itself is safed by the pagehide flush.)
+  var swReloaded=false,swPending=false;
+  function swReload(){
+    if(swReloaded)return;swReloaded=true;
+    try{sessionStorage.setItem('pp.resume','1')}catch(e){}
+    location.reload();
+  }
   navigator.serviceWorker.addEventListener('controllerchange',function(){
-    if(swReloaded)return;swReloaded=true;location.reload();
+    if(document.visibilityState==='hidden')swReload();else swPending=true;
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(swPending&&document.visibilityState==='hidden')swReload();
   });
 }
 </script>
