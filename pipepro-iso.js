@@ -71,30 +71,69 @@ function computeModel(d){
       nodeFit[n.id]={type:'tee',deg,headerRuns:[rs[hi].id,rs[hj].id],branchRun:rs[bk].id};
     }else{nodeFit[n.id]={type:'cross',deg};warn.push('Node '+n.id+': '+deg+'-way — not supported')}
   });
-  // per-run line size: olet branches (and everything drawn beyond them) run at
-  // the olet's branch size, not the header size — flood-fill from each branch
-  const runSize={};d.runs.forEach(r=>{runSize[r.id]=d.size});
-  d.nodes.forEach(n=>{ // creation order, so an olet nested on a branch overrides its own subtree
-    const f=nodeFit[n.id];
-    if(!f||f.type!=='olet'||f.branchRun==null||!f.ol||!f.ol.bs)return;
-    const blocked=new Set(f.headerRuns);
-    const seen=new Set([f.branchRun]);const q=[f.branchRun];
-    while(q.length){
-      const rid=q.shift();runSize[rid]=f.ol.bs;
-      const r=d.runs.find(x=>x.id===rid);if(!r)continue;
-      [r.a,r.b].forEach(nid=>{(runsBy[nid]||[]).forEach(rr=>{
-        if(!blocked.has(rr.id)&&!seen.has(rr.id)){seen.add(rr.id);q.push(rr.id)}})});
+  // ── Line-size propagation ──────────────────────────────────────────────
+  // Size changes at: olet branches (ol.bs), reducing-tee branches (teeBs),
+  // and in-line reducers/bushings (reds[].to — the size flips AT the part, in
+  // the direction the run was drawn, a→b). BFS from the root mirrors the
+  // position walk; runs are always drawn parent→child, so we enter at `a`.
+  const teeBs=d.teeBs||{};
+  const runById={};d.runs.forEach(r=>{runById[r.id]=r});
+  const redSeq=rid=>{const rl=(runById[rid]||{}).len||0;
+    return(redsMap[rid]||[]).filter(x=>x.to).slice().sort((p,q)=>((p.dist>0?p.dist:rl/2))-((q.dist>0?q.dist:rl/2)))};
+  const runSize={},runSizeEnd={};
+  d.runs.forEach(r=>{runSize[r.id]=d.size;runSizeEnd[r.id]=d.size});
+  if(d.nodes.length){
+    const q2=[d.nodes[0].id];const szAtNode={[d.nodes[0].id]:d.size};
+    while(q2.length){
+      const id=q2.shift();const f=nodeFit[id];
+      for(const r of runsBy[id]){
+        const other=r.a===id?r.b:r.a;
+        if(szAtNode[other]!=null)continue;
+        let sz=szAtNode[id];
+        if(f&&f.branchRun===r.id){ // stepping onto a branch leg resets to branch size
+          if(f.type==='olet'&&f.ol&&f.ol.bs)sz=f.ol.bs;
+          else if(f.type==='tee'&&teeBs[id])sz=teeBs[id];
+        }
+        if(r.a===id){runSize[r.id]=sz;redSeq(r.id).forEach(rd=>{sz=rd.to});runSizeEnd[r.id]=sz}
+        else{runSize[r.id]=sz;runSizeEnd[r.id]=sz} // reverse entry (non-tree edge) — no reducer flip
+        szAtNode[other]=sz;
+        q2.push(other);
+      }
     }
-  });
+  }
+  // size of a specific run AT a specific node (its two ends can differ now)
+  const szSide=(rid,nodeId)=>{const r=runById[rid];if(!r)return d.size;
+    return nodeId===r.b?(runSizeEnd[rid]??d.size):(runSize[rid]??d.size)};
+  // size of a run at a distance along it (for parts placed past a reducer)
+  function sizeAt(rid,dist){let cur=runSize[rid]??d.size;const rl=(runById[rid]||{}).len||0;
+    redSeq(rid).forEach(rd=>{const dd=rd.dist>0?rd.dist:rl/2;if(dist!=null&&dist>dd)cur=rd.to});
+    return cur}
   // node size = size of the pipe passing through it (branch nodes shrink with the branch)
-  Object.keys(nodeFit).forEach(k=>{
-    const rs=runsBy[k]||[];const f=nodeFit[k];
-    f.sz=rs.length?(f.type==='olet'?runSize[(f.headerRuns&&f.headerRuns[0])??rs[0].id]:runSize[rs[0].id]):d.size;
+  d.nodes.forEach(n=>{
+    const f=nodeFit[n.id];if(!f)return;const rs=runsBy[n.id]||[];
+    if(f.type==='tee'&&teeBs[n.id])f.bs=teeBs[n.id];
+    const ref=f.type==='olet'?((f.headerRuns&&f.headerRuns[0])??(rs[0]&&rs[0].id)):(rs[0]&&rs[0].id);
+    f.sz=ref!=null?szSide(ref,n.id):d.size;
   });
   const npsOf=sz=>((typeof NPS!=='undefined'&&NPS[sz])||parseFloat(sz)||2);
-  // takeout for a run at a node — sized to that run's line size
+  const warnedTeeM=new Set();
+  // takeout for a run at a node — sized to that run's line size AT that node
   function toAt(nodeId,runId){const f=nodeFit[nodeId];if(!f)return 0;
-    const sz=runSize[runId]||d.size;
+    const sz=szSide(runId,nodeId);
+    if(f.type==='tee'&&f.branchRun===runId&&f.bs){
+      // reducing tee BRANCH: center-to-outlet is the B16.9 "M" dim, NOT the
+      // run-size C. User-set M (teeM) wins; then the verified table; the
+      // run-C estimate is a LAST resort and gets its own warning — C ≥ M, so
+      // estimating with C cuts the branch piece SHORT (scrap direction).
+      const M=(d.teeM||{})[nodeId];
+      if(M!=null)return M;
+      const hsz=szSide((f.headerRuns&&f.headerRuns[0])??runId,nodeId);
+      const t=(typeof REDTEE_M!=='undefined'&&REDTEE_M[hsz]&&REDTEE_M[hsz][f.bs])||null;
+      if(t!=null)return t;
+      if(!warnedTeeM.has(nodeId)){warnedTeeM.add(nodeId);
+        warn.push('Node '+nodeId+': reducing tee '+hsz+' x '+f.bs+' — branch takeout is the run-C ESTIMATE. Set the real B16.9 M dim on the tee sheet before cutting.')}
+      return isoTakeout('tee',npsOf(hsz),isSW,hsz);
+    }
     // flanged ends: working dims run to the GASKET FACE — the flange's own
     // length (B16.5 Y) comes out of the pipe. SO flange: pipe inserts, ~1/2"
     // face setback per shop convention.
@@ -105,7 +144,7 @@ function computeModel(d){
       // header runs pass straight through (0); the BRANCH seats on the header —
       // deduct header OD/2 (to the header surface; olet stand-out is mfr-specific)
       if(f.branchRun===runId){
-        const hsz=runSize[(f.headerRuns&&f.headerRuns[0])??runId]||d.size;
+        const hsz=szSide((f.headerRuns&&f.headerRuns[0])??runId,nodeId);
         return ((typeof OD_TBL!=='undefined'&&OD_TBL[hsz])||npsOf(hsz))/2;
       }
       return 0;
@@ -145,6 +184,7 @@ function computeModel(d){
       welds.push({key:key2,no:welds.length+1,at:r.id,desc:v.type+' '+lbl+' 2',sf:d.sfOv?.[key2]||'S'});
     });
     (redsMap[r.id]||[]).forEach((rd,i)=>{
+      if(rd.kind==='BUSH')return; // threaded bushing screws in — no welds
       const nm=(rd.kind==='ECC'?'ECC':'CON')+' RED '+(isSW?'SW':'BW');
       const key='r'+r.id+'-'+i+'a',key2='r'+r.id+'-'+i+'b';
       welds.push({key,no:welds.length+1,at:r.id,desc:nm+' 1',sf:d.sfOv?.[key]||'S'});
@@ -176,26 +216,37 @@ function computeModel(d){
   // at its field-measured distance: the piece becomes separate cut segments
   // between break faces. dist = run-start → part CENTER, as measured in field.
   function runBreaks(rid){
-    const sz=runSize[rid]||d.size;
-    const out=[];
     // effective break width = what the part REALLY consumes between pipe ends:
-    // flanged parts include their two mating WN flanges + gasket allowances
-    (d.valves?.[rid]||[]).forEach(v=>{
-      const conn=v.conn||'FLGD';const ft=v.ftype||'WN';
-      const w=conn==='FLGD'?(v.ff||0)+2*(flgSideTO(sz,v.cls||'#150',ft)+GSK_ALLOW):(v.ff||0);
-      // SO mating flanges are fillet-welded — no root gap; WN/LJ butt-weld
-      out.push({kind:v.type,ff:w,dist:v.dist,rid,gap:conn==='BW'||(conn==='FLGD'&&ft!=='SO')});
+    // flanged parts include their two mating WN flanges + gasket allowances.
+    // Breaks are folded in drawn order so each part is sized at the line size
+    // where it actually sits (a valve past a reducer stacks at the small size),
+    // and each break carries the size on its two sides (szBefore/szAfter).
+    const raw=[];
+    (d.valves?.[rid]||[]).forEach(v=>raw.push({pk:'v',o:v,dist:v.dist,rid}));
+    (redsMap[rid]||[]).forEach(rd=>raw.push({pk:'r',o:rd,dist:rd.dist,rid}));
+    (((d.flgs||{})[rid])||[]).forEach(fl=>raw.push({pk:'f',o:fl,dist:fl.dist,rid}));
+    const rlen=(runById[rid]||{}).len||0;
+    raw.sort((p,q)=>((p.dist>0?p.dist:rlen/2))-((q.dist>0?q.dist:rlen/2)));
+    let cur=runSize[rid]??d.size;
+    raw.forEach(br=>{
+      const sz=cur;br.szBefore=sz;
+      if(br.pk==='v'){const v=br.o;const conn=v.conn||'FLGD';const ft=v.ftype||'WN';
+        br.kind=v.type;
+        br.ff=conn==='FLGD'?(v.ff||0)+2*(flgSideTO(sz,v.cls||'#150',ft)+GSK_ALLOW):(v.ff||0);
+        // SO mating flanges are fillet-welded — no root gap; WN/LJ butt-weld
+        br.gap=conn==='BW'||(conn==='FLGD'&&ft!=='SO');
+      }else if(br.pk==='r'){const rd=br.o;
+        if(rd.kind==='BUSH'){br.kind='THD BUSHING';br.ff=rd.len||1;br.gap=false}
+        else{br.kind=(rd.kind==='ECC'?'ECC':'CONC')+' RED';
+          const big=rd.to&&npsOf(rd.to)>npsOf(sz)?rd.to:sz; // B16.9 H — larger end governs
+          br.ff=rd.len||RED_H[npsOf(big)]||0;br.gap=!isSW}
+        if(rd.to)cur=rd.to;
+      }else{const fl=br.o;const ft=fl.ftype||'WN';
+        br.kind='BRKOUT FLGS';
+        br.ff=2*flgSideTO(sz,fl.cls||'#150',ft)+GSK_ALLOW+(fl.ff||0);br.gap=ft!=='SO'}
+      br.szAfter=cur;
     });
-    (redsMap[rid]||[]).forEach(rd=>{
-      const w=rd.len||RED_H[npsOf(sz)]||0; // B16.9 H when not overridden
-      out.push({kind:(rd.kind==='ECC'?'ECC':'CONC')+' RED',ff:w,dist:rd.dist,rid,gap:!isSW});
-    });
-    (((d.flgs||{})[rid])||[]).forEach(fl=>{
-      const ft=fl.ftype||'WN';
-      const w=2*flgSideTO(sz,fl.cls||'#150',ft)+GSK_ALLOW+(fl.ff||0);
-      out.push({kind:'BRKOUT FLGS',ff:w,dist:fl.dist,rid,gap:ft!=='SO'});
-    });
-    return out;
+    return raw;
   }
   // root gap applies at BUTT-welded boundaries only (BW drawings)
   const endGap=nodeId=>{
@@ -205,7 +256,6 @@ function computeModel(d){
   };
   const runsInfo=[];const perRunMap={};let pi=1;let unplaced=0;
   for(const prs of groups.values()){
-    const size=runSize[prs[0].run.id]||d.size;
     // order member runs into a chain (they join end-to-end through olet nodes)
     let chain;
     if(prs.length===1)chain=[{run:prs[0].run,rev:false}];
@@ -227,13 +277,17 @@ function computeModel(d){
     const startNode=firstC.rev?firstC.run.b:firstC.run.a;
     const endNode=lastC.rev?lastC.run.a:lastC.run.b;
     const startTO=toAt(startNode,firstC.run.id),endTO=toAt(endNode,lastC.run.id);
+    // size at the chain start; reducer/bushing breaks flip it as we walk
+    let curSz=firstC.rev?(runSizeEnd[firstC.run.id]??d.size):(runSize[firstC.run.id]??d.size);
     // map every break to a global position along the chain
     const breaks=[];let off=0;
     chain.forEach(c=>{
       runBreaks(c.run.id).forEach(br=>{
         let dd=br.dist;
         if(dd==null||!(dd>0)||dd>c.run.len){dd=c.run.len/2;br.noDist=true;unplaced++}
-        breaks.push({...br,s:off+(c.rev?c.run.len-dd:dd)});
+        // size on the far side of this break, in CHAIN direction (a reversed
+        // run is walked against its drawn direction, so the sides swap)
+        breaks.push({...br,s:off+(c.rev?c.run.len-dd:dd),szNext:c.rev?br.szBefore:br.szAfter});
       });
       off+=c.run.len;
     });
@@ -247,7 +301,7 @@ function computeModel(d){
       const cut=face-prevFace-gaps;
       const mark='P'+pi;pi++;
       if(cut<0)warn.push(mark+': parts overlap or takeouts exceed span — check field distances');
-      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:span,toA:leftDed,toB:rightDed+gaps,vff:0,cut,size,labelRun:null});
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:span,toA:leftDed,toB:rightDed+gaps,vff:0,cut,size:curSz,labelRun:null});
       segMarks.push(mark);
     };
     if(breaks.length===0){
@@ -256,13 +310,14 @@ function computeModel(d){
       const mark='P'+pi;pi++;
       if(cut<0)warn.push(mark+': cut length negative — run shorter than takeouts');
       const labelRun=chain.reduce((m2,c)=>c.run.len>m2.run.len?c:m2,chain[0]).run.id;
-      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:L,toA:startTO,toB:endTO+gaps,vff:0,cut,size,labelRun});
+      runsInfo.push({run:prs[0].run,runIds:prs.map(p=>p.run.id),mark,cc:L,toA:startTO,toB:endTO+gaps,vff:0,cut,size:curSz,labelRun});
       segMarks.push(mark);
     }else{
       let sPrev=0,dedPrev=startTO,gPrev=gapStart;
       breaks.forEach(br=>{
         emitSeg(br.s-br.ff/2,dedPrev,br.ff/2,br.s-sPrev,gPrev,br.gap);
         prevFace=br.s+br.ff/2;sPrev=br.s;dedPrev=br.ff/2;gPrev=br.gap;
+        curSz=br.szNext??curSz; // size flips at reducer/bushing breaks
       });
       emitSeg(L-endTO,dedPrev,endTO,L-sPrev,gPrev,gapEnd);
     }
@@ -273,15 +328,17 @@ function computeModel(d){
     prs.forEach(p=>{perRunMap[p.run.id]={toA:p.toA,toB:p.toB,ded:p.ded,ri:riList[0],marks:segMarks,breaks:breaks.filter(b=>b.rid===p.run.id)}});
   }
   if(unplaced>0)warn.push(unplaced+' part(s) have no field distance — placed mid-run. Tap the part row to set the measured distance.');
-  // reducers change line size, but downstream runs stay at the drawn size — surface the trap
+  // reducer inventory with real from/to sizes (folded in drawn order) — BOM + UI
+  const redList=[];
   d.runs.forEach(r=>{
-    if((redsMap[r.id]||[]).length){
-      const contA=(runsBy[r.a]||[]).length>1,contB=(runsBy[r.b]||[]).length>1;
-      if(contA&&contB){const ri=perRunMap[r.id];warn.push((ri?ri.ri.mark:'Run')+': line continues past a reducer — takeouts & BOM stay at '+ (runSize[r.id]||d.size) +'; draw the reduced side as its own ISO');}
-    }
+    let cur=runSize[r.id]??d.size;const rl=r.len||0;
+    (redsMap[r.id]||[]).slice().sort((p,q)=>((p.dist>0?p.dist:rl/2))-((q.dist>0?q.dist:rl/2))).forEach(rd=>{
+      redList.push({rid:r.id,kind:rd.kind,from:cur,to:rd.to||cur,rd});
+      if(rd.to)cur=rd.to;
+    });
   });
   const openEnds=d.nodes.filter(n=>nodeFit[n.id]&&nodeFit[n.id].deg<=1&&nodeFit[n.id].type==='open').map(n=>n.id);
-  return{pos,runsBy,nodeFit,welds,runsInfo,perRun:perRunMap,runSize,openEnds,warn,nps:npsOf(d.size)};
+  return{pos,runsBy,nodeFit,welds,runsInfo,perRun:perRunMap,runSize,runSizeEnd,sizeAt,redList,openEnds,warn,nps:npsOf(d.size)};
 }
 // ── BOM ──
 function isoBOM(d,m){
@@ -299,7 +356,10 @@ function isoBOM(d,m){
     :({ell90:'90° LR ELL '+sz+' BW',ell90sr:'90° SR ELL '+sz+' BW',ell45:'45° ELL '+sz+' BW',tee:'TEE '+sz+' BW',cap:'CAP '+sz+' BW',flangeWN:'WN FLANGE '+sz,flangeSO:'SO FLANGE '+sz,flangeLJ:'LJ FLANGE + STUB END '+sz,blindFlg:'BLIND END SET '+sz+' (WN flg + blind + gskt + studs)',capTHD:'THD CAP '+sz})[type];
   const counts={};
   Object.values(m.nodeFit).forEach(f=>{
-    const desc=fitDesc(f.type,f.sz||d.size);
+    // reducing tee: header size x header size x outlet
+    const desc=f.type==='tee'&&f.bs
+      ?(isSW?'SW TEE ':'TEE ')+(f.sz||d.size)+' x '+f.bs+' RED'+(isSW?'':' BW')
+      :fitDesc(f.type,f.sz||d.size);
     if(desc)counts[desc]=(counts[desc]||0)+1;
   });
   Object.entries(counts).forEach(([desc,q])=>items.push({qty:q,desc}));
@@ -323,19 +383,19 @@ function isoBOM(d,m){
   const flgName=ft=>ft==='SO'?'SO FLANGE':ft==='LJ'?'LJ FLANGE':(isSW?'SW FLANGE':'WN FLANGE');
   const SPECIALTY=['Expansion Joint','Union','Swage Nipple'];
   Object.entries(d.valves||{}).forEach(([rid,list])=>list.forEach(v=>{
-    const c=v.conn||'FLGD';const sz=(m.runSize&&m.runSize[rid])||d.size;
+    const c=v.conn||'FLGD';const sz=m.sizeAt?m.sizeAt(+rid,v.dist):((m.runSize&&m.runSize[rid])||d.size);
     const noun=SPECIALTY.includes(v.type)?'':' VALVE';
     items.push({qty:1,desc:v.type.toUpperCase()+noun+' '+sz+' '+c+(v.cls&&c==='FLGD'?' '+v.cls:'')+(c==='FLGD'&&v.ftype&&v.ftype!=='WN'?' ('+v.ftype+' mating flgs)':'')+(v.ff?' (F-F '+isoFmt(v.ff)+')':'')});
     if(c==='FLGD')addHw(sz,v.ftype,2,2,'valve bolt-up');
   }));
-  // reducers — sized to their run
-  Object.entries(d.reds||{}).forEach(([rid,list])=>list.forEach(rd=>{
-    const sz=(m.runSize&&m.runSize[rid])||d.size;
-    items.push({qty:1,desc:(rd.kind==='ECC'?'ECC':'CON')+' REDUCER '+sz+' x '+rd.to+(isSW?' SW':' BW')});
-  }));
+  // reducers & bushings — real from x to (folded through prior size changes)
+  (m.redList||[]).forEach(ri=>{
+    if(ri.kind==='BUSH')items.push({qty:1,desc:'THD RED BUSHING '+ri.from+' x '+ri.to+' (field fit — verify engagement)'});
+    else items.push({qty:1,desc:(ri.kind==='ECC'?'ECC':'CON')+' REDUCER '+ri.from+' x '+ri.to+(isSW?' SW':' BW')});
+  });
   // breakout flange pairs
   Object.entries(d.flgs||{}).forEach(([rid,list])=>list.forEach(fl=>{
-    const sz=(m.runSize&&m.runSize[rid])||d.size;
+    const sz=m.sizeAt?m.sizeAt(+rid,fl.dist):((m.runSize&&m.runSize[rid])||d.size);
     addHw(sz,fl.ftype,1,2,'breakout');
   }));
   Object.values(hw).forEach(h=>{
@@ -355,7 +415,7 @@ function isoNewDrawing(st,defaults){
   const n=st.seq++;const pad=String(n).padStart(3,'0');
   return{id:'d'+Date.now(),name:'ISO-'+pad,lineNo:(defaults.size||'4"')+'-'+pad,size:defaults.size||'4"',mat:defaults.mat||'CS A106 Gr.B',sch:defaults.sch||'Sch 40',
     corner:'NE',asset:'',drawnBy:st.drawnBy||'',created:Date.now(),updated:Date.now(),conn:'BW',
-    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},endClsOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},activeEnd:1};
+    nodes:[{id:1}],runs:[],nextId:2,fitOv:{},endOv:{},endClsOv:{},sfOv:{},valves:{},reds:{},oletOv:{},flgs:{},teeBs:{},teeM:{},activeEnd:1};
 }
 // Run-dim second line: single segment shows its cut; a piece split by parts
 // lists its marks and points at the cut list (each segment has its own cut)
@@ -494,6 +554,7 @@ function buildPrintSVG(d,m,widthPx){
     else if(f.type==='blindFlg'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.45}" fill="#fff" stroke="#000" stroke-width="${lw*1.8}"/><circle cx="${x}" cy="${y}" r="${fs*0.2}" fill="#000"/>`}
     else if(f.type==='capTHD'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.35}" fill="#000"/>`}
     else if(f.type==='olet'){s+=`<circle cx="${x}" cy="${y}" r="${fs*0.38}" fill="#fff" stroke="#000" stroke-width="${lw*1.4}"/><circle cx="${x}" cy="${y}" r="${fs*0.14}" fill="#000"/>`}
+    if(f.type==='tee'&&f.bs){s+=`<text x="${x+fs*0.7}" y="${y-fs*0.55}" font-size="${fs*0.66}" font-family="Helvetica" fill="#000">x${f.bs}</text>`}
   });
   // weld dots + labels — shop weld: filled dot; field weld: open dot flagged FW
   const at={};m.welds.forEach(w=>{if(typeof w.at!=='number'&&!m.pos[w.at])return;const p=m.pos[w.at];if(!p)return;(at[w.at]=at[w.at]||[]).push(w)});
